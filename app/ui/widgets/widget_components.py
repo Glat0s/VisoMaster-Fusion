@@ -213,7 +213,7 @@ class TargetMediaCardButton(CardButton):
             main_window.video_processor.media_rotation = rotation_angle
             media_capture = cv2.VideoCapture(self.media_path)
             if not media_capture.isOpened():
-                print(f"Error opening video {self.media_path}")
+                print(f"[ERROR] Error opening video {self.media_path}")
                 return  # If the video cannot be opened, exit the function
 
             media_capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -365,9 +365,9 @@ class TargetMediaCardButton(CardButton):
         # Send the file to the trash
         if os.path.exists(self.media_path):
             send2trash(self.media_path)
-            print(f"{self.media_path} has been sent to the trash.")
+            print(f"[INFO] {self.media_path} has been sent to the trash.")
         else:
-            print(f"{self.media_path} does not exist.")
+            print(f"[ERROR] {self.media_path} does not exist.")
 
         self.deleteLater()
 
@@ -486,7 +486,7 @@ class TargetFaceCardButton(CardButton):
         else:
             # Embedding not found or empty, calculate it now
             print(
-                f"TargetFaceCardButton {self.face_id}: Calculating missing embedding for model '{embedding_swap_model}'..."
+                f"[INFO] TargetFaceCardButton {self.face_id}: Calculating missing embedding for model '{embedding_swap_model}'..."
             )
             if self.cropped_face is None or self.cropped_face.size == 0:
                 print(
@@ -556,7 +556,7 @@ class TargetFaceCardButton(CardButton):
                     # Store the newly calculated embedding
                     self.embedding_store[embedding_swap_model] = new_embedding
                     print(
-                        f"TargetFaceCardButton {self.face_id}: Stored new embedding for '{embedding_swap_model}'."
+                        f"[INFO] TargetFaceCardButton {self.face_id}: Stored new embedding for '{embedding_swap_model}'."
                     )
                     return new_embedding
                 else:
@@ -718,7 +718,7 @@ class TargetFaceCardButton(CardButton):
                         # Cache missing. We are the first thread.
                         # Generate, cache, and assign the map.
                         print(
-                            f"Generating K/V map for input face: {input_face_button.media_path}"
+                            f"[INFO] Generating K/V map for input face: {input_face_button.media_path}"
                         )
                         try:
                             from PIL import Image
@@ -745,10 +745,10 @@ class TargetFaceCardButton(CardButton):
                             # Cache and assign
                             input_face_button.kv_map = kv_map
                             self.assigned_kv_map = kv_map
-                            print("Generated and cached K/V map.")
+                            print("[INFO] Generated and cached K/V map.")
 
                         except Exception as e:
-                            print(f"Error generating K/V map: {e}")
+                            print(f"[ERROR] Error generating K/V map: {e}")
                             traceback.print_exc()
                             input_face_button.kv_map = {}  # Empty cache in case of error
                             self.assigned_kv_map = {}
@@ -997,16 +997,16 @@ class InputFaceCardButton(CardButton):
             try:
                 if os.path.exists(self.kv_map):
                     os.remove(self.kv_map)
-                    print(f"Removed K/V data file: {self.kv_map}")
+                    print(f"[INFO] Removed K/V data file: {self.kv_map}")
             except Exception as e:
-                print(f"Error removing K/V data file {self.kv_map}: {e}")
+                print(f"[ERROR] Error removing K/V data file {self.kv_map}: {e}")
 
         if isinstance(self.kv_map, str) and os.path.exists(self.kv_map):
             try:
                 os.remove(self.kv_map)
-                print(f"Removed K/V data file: {self.kv_map}")
+                print(f"[INFO] Removed K/V data file: {self.kv_map}")
             except Exception as e:
-                print(f"Error removing K/V data file {self.kv_map}: {e}")
+                print(f"[ERROR] Error removing K/V data file {self.kv_map}: {e}")
 
     def _remove_face_from_lists(self):
         main_window = self.main_window
@@ -1066,9 +1066,9 @@ class InputFaceCardButton(CardButton):
         # Send the file to the trash
         if os.path.exists(self.media_path):
             send2trash(self.media_path)
-            print(f"{self.media_path} has been sent to the trash.")
+            print(f"[INFO] {self.media_path} has been sent to the trash.")
         else:
-            print(f"{self.media_path} does not exist.")
+            print(f"[ERROR] {self.media_path} does not exist.")
 
         common_widget_actions.refresh_frame(main_window)
         if not main_window.input_faces:

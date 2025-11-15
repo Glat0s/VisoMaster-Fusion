@@ -137,7 +137,7 @@ def save_job(
         save_job_workspace(
             main_window, data_filename, use_job_name_for_output, output_file_name
         )
-        print(f"[DEBUG] Job saved: {data_filename}")
+        print(f"[INFO] Job saved: {data_filename}")
         common_widget_actions.create_and_show_toast_message(
             main_window, "Job Saved", f"Job '{job_name}' has been saved."
         )
@@ -186,7 +186,7 @@ def delete_job(main_window: "MainWindow") -> bool:
         if os.path.exists(job_file):
             try:
                 send2trash(job_file)  # Use send2trash for safety
-                print(f"[DEBUG] Job moved to trash: {job_file}")
+                print(f"[INFO] Job moved to trash: {job_file}")
                 deleted_any = True
             except Exception as e:
                 print(f"[ERROR] Failed to move job to trash: {e}")
@@ -196,7 +196,7 @@ def delete_job(main_window: "MainWindow") -> bool:
                     f"Could not move job '{job_name}' to trash:\n{e}",
                 )
         else:
-            print(f"[DEBUG] Job file not found for deletion: {job_file}")
+            print(f"[ERROR] Job file not found for deletion: {job_file}")
 
     if deleted_any:
         refresh_job_list(main_window)  # Update the UI list
@@ -235,7 +235,7 @@ def load_job(main_window: "MainWindow"):
     job_name = selected_jobs[0]
 
     # Use the original, heavy load_job_workspace function
-    print(f"[DEBUG] Performing full workspace load for job: {job_name}")
+    print(f"[INFO] Performing full workspace load for job: {job_name}")
     load_job_workspace(main_window, job_name)
 
 
@@ -430,10 +430,9 @@ def _load_job_target_faces_and_params(main_window: "MainWindow", data: dict):
             # This is done *here* in the main thread, *before*
             # any FrameWorker starts, to prevent a race condition.
             print(
-                f"[DEBUG] (Main Thread) Pre-calculating embedding and K/V map for target face {face_id}..."
+                f"[INFO] Pre-calculating embedding and K/V map for target face {face_id}..."
             )
             target_face_obj.calculate_assigned_input_embedding()
-            print(f"[DEBUG] (Main Thread) Pre-calculation complete for {face_id}.")
         else:
             print(
                 f"[WARN] Target face object with id {face_id} not found after creation."
@@ -456,7 +455,7 @@ def _load_job_controls_and_state(
     if swap_faces_state and not is_batch_load:
         # This will trigger a frame refresh via its own logic
         video_control_actions.process_swap_faces(main_window)
-    print(f"[DEBUG] Swap Faces button state restored: {swap_faces_state}")
+    print(f"[INFO] Swap Faces button state restored: {swap_faces_state}")
 
     # Restore misc paths and settings
     main_window.last_target_media_folder_path = data.get(
@@ -618,10 +617,10 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
     This is used by the 'Load Job' button.
     """
 
-    print("[DEBUG] Loading job workspace...")
+    print("[INFO] Loading job workspace...")
     data_filename = os.path.join(jobs_dir, f"{job_name}.json")
     if not Path(data_filename).is_file():
-        print(f"[DEBUG] No valid file found for job: {job_name}.")
+        print(f"[ERROR] No valid file found for job: {job_name}.")
         QMessageBox.critical(
             main_window, "Load Error", f"Job file not found:\n{data_filename}"
         )
@@ -695,7 +694,7 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
         _load_job_markers(main_window, data)
 
         progress_dialog.update_progress(8, total_steps, steps[7])
-        print(f"[DEBUG] Loaded workspace from: {data_filename}")
+        print(f"[INFO] Loaded workspace from: {data_filename}")
 
         # After loading, check if any target faces were loaded
         if main_window.target_faces:
@@ -711,14 +710,6 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
             if first_face_button:
                 first_face_button.setChecked(True)  # Visually select it
                 main_window.cur_selected_target_face_button = first_face_button
-                print(
-                    f"[DEBUG] Set cur_selected_target_face_button to face_id: {first_face_id}"
-                )
-
-                # *** Visually check assigned embeddings for this face ***
-                print(
-                    f"[DEBUG] Checking assigned embeddings for face_id: {first_face_id}"
-                )
                 assigned_embedding_ids = (
                     first_face_button.assigned_merged_embeddings.keys()
                 )
@@ -727,12 +718,12 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
                     if embed_button:
                         embed_button.setChecked(True)
                         print(
-                            f"  - Checked embedding: {embed_button.embedding_name} (ID: {embed_id})"
+                            f"[INFO] Checked embedding: {embed_button.embedding_name} (ID: {embed_id})"
                         )
 
                 # *** Visually check assigned input faces for this face ***
                 print(
-                    f"[DEBUG] Checking assigned input faces for face_id: {first_face_id}"
+                    f"[INFO] Checking assigned input faces for face_id: {first_face_id}"
                 )
                 assigned_input_face_ids = first_face_button.assigned_input_faces.keys()
                 for input_face_id in assigned_input_face_ids:
@@ -740,11 +731,11 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
                     if input_face_button:
                         input_face_button.setChecked(True)
                         print(
-                            f"  - Checked input face: {input_face_button.media_path} (ID: {input_face_id})"
+                            f"[INFO] Checked input face: {input_face_button.media_path} (ID: {input_face_id})"
                         )
 
             print(
-                f"[DEBUG] Setting parameter widgets for loaded face_id: {first_face_id}"
+                f"[INFO] Setting parameter widgets for loaded face_id: {first_face_id}"
             )
             # Now call the update function with the specific face_id
             common_widget_actions.set_widgets_values_using_face_id_parameters(
@@ -763,7 +754,7 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
                 main_window.default_parameters.copy()
             )
             print(
-                "[DEBUG] No target faces loaded in job, parameter widgets retain default values."
+                "[ERROR] No target faces loaded in job, parameter widgets retain default values."
             )
 
         # Update slider visuals after loading everything
@@ -774,9 +765,9 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
 
         # --- Re-enable all UI controls after loading ---
         layout_actions.enable_all_parameters_and_control_widget(main_window)
-        print("[DEBUG] All UI controls re-enabled after job load.")
+        print("[INFO] All UI controls re-enabled after job load.")
 
-        print(f"[DEBUG] Successfully loaded workspace from: {data_filename}")
+        print(f"[INFO] Successfully loaded workspace from: {data_filename}")
 
     except Exception as e:
         print(f"[ERROR] Error during job workspace loading: {e}")
@@ -796,7 +787,7 @@ def _restore_workspace_from_snapshot(main_window: "MainWindow", data: dict):
     This is used after a job batch finishes to return to the pre-batch state.
     """
 
-    print("[DEBUG] Restoring workspace from snapshot...")
+    print("[INFO] Restoring workspace from snapshot...")
     if not data:
         print("[ERROR] Workspace snapshot data is empty. Cannot restore.")
         QMessageBox.critical(
@@ -878,14 +869,6 @@ def _restore_workspace_from_snapshot(main_window: "MainWindow", data: dict):
             if first_face_button:
                 first_face_button.setChecked(True)  # Visually select it
                 main_window.cur_selected_target_face_button = first_face_button
-                print(
-                    f"[DEBUG] Set cur_selected_target_face_button to face_id: {first_face_id}"
-                )
-
-                # *** Visually check assigned embeddings for this face ***
-                print(
-                    f"[DEBUG] Checking assigned embeddings for restored face_id: {first_face_id}"
-                )
                 assigned_embedding_ids = (
                     first_face_button.assigned_merged_embeddings.keys()
                 )
@@ -894,12 +877,12 @@ def _restore_workspace_from_snapshot(main_window: "MainWindow", data: dict):
                     if embed_button:
                         embed_button.setChecked(True)
                         print(
-                            f"  - Checked embedding: {embed_button.embedding_name} (ID: {embed_id})"
+                            f"[INFO] Checked embedding: {embed_button.embedding_name} (ID: {embed_id})"
                         )
 
                 # *** Visually check assigned input faces for this face ***
                 print(
-                    f"[DEBUG] Checking assigned input faces for restored face_id: {first_face_id}"
+                    f"[INFO] Checking assigned input faces for restored face_id: {first_face_id}"
                 )
                 assigned_input_face_ids = first_face_button.assigned_input_faces.keys()
                 for input_face_id in assigned_input_face_ids:
@@ -907,11 +890,11 @@ def _restore_workspace_from_snapshot(main_window: "MainWindow", data: dict):
                     if input_face_button:
                         input_face_button.setChecked(True)
                         print(
-                            f"  - Checked input face: {input_face_button.media_path} (ID: {input_face_id})"
+                            f"[INFO] Checked input face: {input_face_button.media_path} (ID: {input_face_id})"
                         )
 
             print(
-                f"[DEBUG] Setting parameter widgets for restored face_id: {first_face_id}"
+                f"[INFO] Setting parameter widgets for restored face_id: {first_face_id}"
             )
             # Now call the update function with the specific face_id
             common_widget_actions.set_widgets_values_using_face_id_parameters(
@@ -929,7 +912,7 @@ def _restore_workspace_from_snapshot(main_window: "MainWindow", data: dict):
                 main_window.default_parameters.copy()
             )
             print(
-                "[DEBUG] No target faces restored in snapshot, parameter widgets retain default values."
+                "[ERROR] No target faces restored in snapshot, parameter widgets retain default values."
             )
 
         # Update slider visuals after restoring everything
@@ -940,9 +923,9 @@ def _restore_workspace_from_snapshot(main_window: "MainWindow", data: dict):
 
         # --- Re-enable all UI controls after restoring ---
         layout_actions.enable_all_parameters_and_control_widget(main_window)
-        print("[DEBUG] All UI controls re-enabled after workspace restore.")
+        print("[INFO] All UI controls re-enabled after workspace restore.")
 
-        print("[DEBUG] Workspace restored successfully from snapshot.")
+        print("[INFO] Workspace restored successfully from snapshot.")
 
     except Exception as e:
         print(f"[ERROR] Error during workspace snapshot restoration: {e}")
@@ -1058,7 +1041,7 @@ def save_job_workspace(
     Main function to save the current workspace to a job file.
     Note: 'job_name_path' is the full path *without* the .json extension.
     """
-    print("[DEBUG] Saving job workspace...")
+    print("[INFO] Saving job workspace...")
     data_filename = f"{job_name_path}.json"
 
     # Get all workspace data
@@ -1074,7 +1057,7 @@ def save_job_workspace(
     with open(data_filename, "w") as data_file:
         json.dump(workspace_data, data_file, indent=4)
 
-    print(f"[DEBUG] Job successfully saved to: {data_filename}")
+    print(f"[INFO] Job successfully saved to: {data_filename}")
 
 
 # --- UI Setup and Signal Connections ---
@@ -1284,7 +1267,7 @@ def load_master_assets(main_window: "MainWindow", master_data: dict):
     (SLOT) Loads all unique assets for the entire job batch.
     This is a HEAVY load, but only runs ONCE per batch.
     """
-    print("[DEBUG] (Main Thread) load_master_assets called.")
+    print("[INFO] Load master assets called.")
 
     # --- Show Progress Dialog ---
     steps = [
@@ -1322,21 +1305,19 @@ def load_master_assets(main_window: "MainWindow", master_data: dict):
         # otherwise the next job_settings_load might clear its required models.
         worker = main_window.input_faces_loader_worker
         if isinstance(worker, ui_workers.InputFacesLoaderWorker) and worker.isRunning():
-            print(
-                "[DEBUG] (Main Thread) Waiting for InputFacesLoaderWorker to finish..."
-            )
+            print("[INFO] Waiting for InputFacesLoaderWorker to finish...")
             loop = QEventLoop()
             worker.finished.connect(loop.quit)
             loop.exec()  # Block until the worker's finished signal is emitted
-            print("[DEBUG] (Main Thread) InputFacesLoaderWorker finished.")
+            print("[INFO] InputFacesLoaderWorker finished.")
 
         progress_dialog.update_progress(4, total_steps, steps[3])
         _load_job_embeddings(main_window, master_data)  # Loads all unique embeddings
 
-        print("[DEBUG] (Main Thread) Master assets loaded.")
+        print("[INFO] Master assets loaded.")
 
     except Exception as e:
-        print(f"[ERROR] (Main Thread) Error during master asset loading: {e}")
+        print(f"[ERROR] Error during master asset loading: {e}")
         traceback.print_exc()
         QMessageBox.critical(
             main_window,
@@ -1356,7 +1337,7 @@ def load_job_settings(main_window: "MainWindow", job_data: dict):
     (SLOT) Loads the lightweight settings for a single job from the batch.
     Assumes master assets are already loaded.
     """
-    print("[DEBUG] (Main Thread) load_job_settings called.")
+    print("[INFO] Load job settings called.")
     try:
         # Store job name context for processing
         main_window.current_job_name = job_data.get("job_name_internal", "Unknown Job")
@@ -1375,21 +1356,19 @@ def load_job_settings(main_window: "MainWindow", job_data: dict):
             and isinstance(selected_media_id, str)
             and main_window.target_videos.get(selected_media_id)
         ):
-            print(f"[DEBUG] (Main Thread) Clicking target media: {selected_media_id}")
+            print(f"[INFO] Clicking target media: {selected_media_id}")
             main_window.target_videos[selected_media_id].click()
         else:
-            print(
-                f"[WARN] (Main Thread) Could not select media_id {selected_media_id} for job."
-            )
+            print(f"[WARN] Could not select media_id {selected_media_id} for job.")
             # Try to select the first available media
             if main_window.target_videos:
                 first_media = next(iter(main_window.target_videos.values()))
                 print(
-                    f"[WARN] (Main Thread) Selecting first available media instead: {first_media.media_id}"
+                    f"[WARN] Selecting first available media instead: {first_media.media_id}"
                 )
                 first_media.click()
             else:
-                print("[ERROR] (Main Thread) No target media loaded, cannot proceed.")
+                print("[ERROR] No target media loaded, cannot proceed.")
                 # This job will likely fail, but we must continue
 
         # 2. Load target faces and parameters. This is safe.
@@ -1403,11 +1382,11 @@ def load_job_settings(main_window: "MainWindow", job_data: dict):
         _load_job_markers(main_window, job_data)
 
         print(
-            f"[DEBUG] (Main Thread) Lightweight settings loaded for job: {main_window.current_job_name}"
+            f"[INFO] Lightweight settings loaded for job: {main_window.current_job_name}"
         )
 
     except Exception as e:
-        print(f"[ERROR] (Main Thread) Error during job settings loading: {e}")
+        print(f"[ERROR] Error during job settings loading: {e}")
         traceback.print_exc()
         QMessageBox.critical(
             main_window,
@@ -1428,7 +1407,7 @@ def clear_job_settings(main_window: "MainWindow"):
     (SLOT) Clears only the settings related to a single job,
     leaving the master assets (media, input faces, embeddings) loaded.
     """
-    print("[DEBUG] (Main Thread) clear_job_settings called.")
+    print("[INFO] Clear job settings called.")
     try:
         card_actions.clear_target_faces(
             main_window
@@ -1437,9 +1416,9 @@ def clear_job_settings(main_window: "MainWindow"):
             main_window
         )  # Clear markers from slider and data
         main_window.job_marker_pairs.clear()  # Clear job segments
-        print("[DEBUG] (Main Thread) Job-specific settings cleared.")
+        print("[INFO] Job-specific settings cleared.")
     except Exception as e:
-        print(f"[ERROR] (Main Thread) Error clearing job settings: {e}")
+        print(f"[ERROR] Error clearing job settings: {e}")
         traceback.print_exc()
     finally:
         # Use the instance event from the job_processor
@@ -1460,16 +1439,16 @@ def handle_batch_completion(main_window: "MainWindow"):
     batch_succeeded = main_window.job_processor.batch_succeeded
     skipped_jobs = main_window.job_processor.skipped_jobs
 
-    print(f"[DEBUG] (Main Thread) Batch finished (Success: {batch_succeeded}).")
+    print(f"[INFO] Batch finished (Success: {batch_succeeded}).")
 
     # --- Restore Workspace from Snapshot ---
     snapshot = getattr(main_window, "workspace_snapshot_before_batch", None)
     if snapshot:
-        print("[DEBUG] (Main Thread) Found workspace snapshot. Restoring...")
+        print("[INFO] Found workspace snapshot. Restoring...")
         try:
             _restore_workspace_from_snapshot(main_window, snapshot)
         except Exception as e:
-            print(f"[ERROR] (Main Thread) Critical error during workspace restore: {e}")
+            print(f"[ERROR] Critical error during workspace restore: {e}")
             traceback.print_exc()
             QMessageBox.critical(
                 main_window,
@@ -1479,11 +1458,9 @@ def handle_batch_completion(main_window: "MainWindow"):
             )
         finally:
             main_window.workspace_snapshot_before_batch = None  # Clear snapshot
-            print("[DEBUG] (Main Thread) Workspace snapshot cleared.")
+            print("[INFO] Workspace snapshot cleared.")
     else:
-        print(
-            "[WARN] (Main Thread) No workspace snapshot found. UI will remain in its last state."
-        )
+        print("[WARN] No workspace snapshot found. UI will remain in its last state.")
         # (Fallback) Just refresh VRAM, as we can't restore or reset
         common_widget_actions.update_gpu_memory_progressbar(main_window)
 
@@ -1513,7 +1490,7 @@ def handle_batch_completion(main_window: "MainWindow"):
     # Clean up the job processor to prevent "zombie listeners"
     if main_window.job_processor:
         try:
-            print("[DEBUG] (Main Thread) Disconnecting JobProcessor signals...")
+            print("[INFO] Disconnecting JobProcessor signals...")
             # Disconnect signals to stop listening to manual events
             main_window.video_processor.processing_started_signal.disconnect(
                 main_window.job_processor.handle_processing_started
@@ -1526,15 +1503,13 @@ def handle_batch_completion(main_window: "MainWindow"):
             )
         except RuntimeError as e:
             # This is normal if signals were not connected or already disconnected
-            print(
-                f"[WARN] (Main Thread) Error disconnecting signals (expected if no job ran): {e}"
-            )
+            print(f"[WARN] Error disconnecting signals (expected if no job ran): {e}")
         except Exception as e:
-            print(f"[ERROR] (Main Thread) Unexpected error disconnecting signals: {e}")
+            print(f"[ERROR] Unexpected error disconnecting signals: {e}")
 
         # Set the object to None to allow the garbage collector to remove it
         main_window.job_processor = None
-        print("[DEBUG] (Main Thread) JobProcessor cleaned up.")
+        print("[INFO] JobProcessor cleaned up.")
 
 
 # --- Job Processing Thread ---
@@ -1549,13 +1524,13 @@ def process_selected_job(main_window: "MainWindow"):
         )
         return
 
-    print(f"[DEBUG] Processing selected jobs: {selected_jobs}")
+    print(f"[INFO] Processing selected jobs: {selected_jobs}")
     start_job_processor(main_window, jobs_to_process=selected_jobs)
 
 
 def start_processing_all_jobs(main_window: "MainWindow"):
     """Starts a JobProcessor thread for all jobs in the list."""
-    print("[DEBUG] Processing all jobs...")
+    print("[INFO] Processing all jobs...")
     start_job_processor(main_window, jobs_to_process=None)  # None means all jobs
 
 
@@ -1572,9 +1547,8 @@ def start_job_processor(main_window: "MainWindow", jobs_to_process: list[str] | 
         return
 
     # Save the current workspace state before starting the batch
-    print("[DEBUG] Saving workspace snapshot before starting job processor...")
+    print("[INFO] Saving workspace snapshot before starting job processor...")
     main_window.workspace_snapshot_before_batch = _serialize_job_data(main_window)
-    print("[DEBUG] Workspace snapshot saved.")
 
     main_window.job_processor = JobProcessor(
         main_window, jobs_to_process=jobs_to_process
@@ -1607,7 +1581,7 @@ def start_job_processor(main_window: "MainWindow", jobs_to_process: list[str] | 
         )
     )
 
-    print("[DEBUG] Starting job_processor thread...")
+    print("[INFO] Starting job_processor thread...")
     main_window.job_processor.start()
 
 
@@ -1706,13 +1680,13 @@ class JobProcessor(QThread):
     @Slot()
     def handle_processing_started(self):
         """Slot to receive signal from VideoProcessor when recording starts."""
-        print("[DEBUG] JobProcessor received processing_started_signal.")
+        print("[INFO] JobProcessor received processing started signal.")
         self.processing_started_event.set()
 
     @Slot()
     def handle_processing_stopped(self):
         """Slot to receive signal from VideoProcessor when recording/processing stops."""
-        print("[DEBUG] JobProcessor received processing_stopped_signal.")
+        print("[INFO] JobProcessor received processing stopped signal.")
         self.processing_stopped_event.set()
 
     @Slot()
@@ -1726,7 +1700,7 @@ class JobProcessor(QThread):
         """Reads and parses a job's JSON file."""
         data_filename = os.path.join(self.jobs_dir, f"{job_name}.json")
         if not Path(data_filename).is_file():
-            print(f"[DEBUG] No valid file found for job: {job_name}.")
+            print(f"[ERROR] No valid file found for job: {job_name}.")
             self.job_failed_signal.emit(
                 job_name, f"Job file not found: {data_filename}"
             )
@@ -1748,9 +1722,7 @@ class JobProcessor(QThread):
         2. Aggregates a master list of *unique* required assets from *valid* jobs.
         3. Populates self.job_data_list (valid jobs) and self.skipped_jobs (invalid jobs).
         """
-        print(
-            "[DEBUG] (JobProcessor) Performing SMART analysis and VALIDATION of job batch..."
-        )
+        print("[INFO] Performing SMART analysis and VALIDATION of job batch...")
         master_data: MasterData = {
             "target_medias_data": [],
             "input_faces_data": {},
@@ -1779,9 +1751,7 @@ class JobProcessor(QThread):
             is_job_valid, skip_reason = _validate_job_files_exist(data)
 
             if not is_job_valid:
-                print(
-                    f"[WARN] (JobProcessor) Skipping job '{job_name}'. Reason: {skip_reason}"
-                )
+                print(f"[WARN] Skipping job '{job_name}'. Reason: {skip_reason}")
                 self.skipped_jobs.append(f"{job_name}: {skip_reason}")
                 continue  # Skip this job
 
@@ -1831,7 +1801,7 @@ class JobProcessor(QThread):
             # --- 3. Add valid job to processing list ---
             valid_job_data_list.append(data)
 
-        print("[DEBUG] (JobProcessor) Smart Analysis complete:")
+        print("[INFO] Smart Analysis complete:")
         print(f"  - {len(valid_job_data_list)} jobs are valid and will be processed.")
         print(f"  - {len(self.skipped_jobs)} jobs will be skipped due to errors.")
         print(
@@ -1851,7 +1821,7 @@ class JobProcessor(QThread):
         Uses a heartbeat event to ensure the job has not frozen.
         Returns True on success, False on failure.
         """
-        print(f"[DEBUG] Toggling record button for job '{job_name}'...")
+        print(f"[INFO] Toggling record button for job '{job_name}'...")
         self.processing_started_event.clear()
         self.processing_stopped_event.clear()
 
@@ -1879,7 +1849,7 @@ class JobProcessor(QThread):
 
         # --- Wait for Processing to Complete (with Heartbeat Watchdog) ---
         print(
-            "[DEBUG] JobProcessor detected processing started. Waiting for completion with heartbeat..."
+            "[INFO] JobProcessor detected processing started. Waiting for completion with heartbeat..."
         )
 
         # (NEW) Polling loop logic
@@ -1929,18 +1899,18 @@ class JobProcessor(QThread):
             pass
 
         # If the while loop exits, it means self.processing_stopped_event was set.
-        print("[DEBUG] JobProcessor received stop signal.")
+        print("[INFO] JobProcessor received stop signal.")
         return True  # Success
 
     def run(self):
         """
         Main thread loop: Performs batch analysis, loads assets, and processes jobs.
         """
-        print("[DEBUG] Entering JobProcessor.run()...")
+        print("[INFO] Entering JobProcessor.run()...")
         self.batch_succeeded = False  # Default to False
 
         if not self.jobs:
-            print("[DEBUG] No jobs to process. Exiting run().")
+            print("[INFO] No jobs to process. Exiting run().")
             self.all_jobs_done_signal.emit()
             return
 
@@ -1957,14 +1927,14 @@ class JobProcessor(QThread):
         # Check if any valid jobs remain after analysis
         if not self.job_data_list:
             print(
-                "[DEBUG] No valid jobs found in batch after analysis. Skipping processing."
+                "[WARN] No valid jobs found in batch after analysis. Skipping processing."
             )
             self.batch_succeeded = True  # No processing failed
             self.all_jobs_done_signal.emit()
             return
 
         # --- 2. Load all master assets ONCE ---
-        print("[DEBUG] Emitting load_master_assets_signal...")
+        print("[INFO] Emitting load master assets signal...")
         self.master_assets_loaded_event.clear()  # Use instance event
         self.load_master_assets_signal.emit(master_data)
 
@@ -1977,16 +1947,16 @@ class JobProcessor(QThread):
             self.job_failed_signal.emit("Batch Load", error_msg)
             return  # <-- Fails, batch_succeeded remains False
 
-        print("[DEBUG] master_assets_loaded_event received, load complete.")
+        print("[INFO] Master assets loaded event received, load complete.")
 
         # --- 3. Process each job with lightweight loading ---
         for job_data in self.job_data_list:
             job_name = job_data.get("job_name_internal", "Unknown")
             self.current_job_name = job_name
-            print(f"[DEBUG] Beginning processing on job: {job_name}")
+            print(f"[INFO] Beginning processing on job: {job_name}")
 
             # --- 3a. Load lightweight settings for this job ---
-            print(f"[DEBUG] Emitting load_job_settings_signal for '{job_name}'")
+            print(f"[INFO] Emitting load job settings signal for '{job_name}'")
             self.job_settings_loaded_event.clear()  # Use instance event
             self.load_job_settings_signal.emit(job_data)
 
@@ -2007,7 +1977,7 @@ class JobProcessor(QThread):
                 # job_failed_signal was already emitted in the helper function
                 break  # Abort batch, batch_succeeded remains False
 
-            print(f"[DEBUG] Processing finished for job: {self.current_job_name}")
+            print(f"[INFO] Processing finished for job: {self.current_job_name}")
 
             # --- 3c. Move job file to 'completed' ---
             job_path = os.path.join(self.jobs_dir, f"{job_name}.json")
@@ -2015,7 +1985,7 @@ class JobProcessor(QThread):
             if os.path.exists(job_path):
                 try:
                     shutil.move(job_path, completed_path)
-                    print(f"[DEBUG] Moved job '{job_name}' to completed folder.")
+                    print(f"[INFO] Moved job '{job_name}' to completed folder.")
                     self.job_completed_signal.emit(job_name)
                 except Exception as e:
                     error_msg = f"Failed to move job {job_name} to completed: {e}"
@@ -2028,7 +1998,7 @@ class JobProcessor(QThread):
                 )
 
             # --- 3d. Clear lightweight settings ---
-            print(f"[DEBUG] Emitting clear_job_settings_signal for '{job_name}'")
+            print(f"[INFO] Emitting clear job settings signal for '{job_name}'")
             self.job_settings_cleared_event.clear()  # Use instance event
             self.clear_job_settings_signal.emit()
             if not self.job_settings_cleared_event.wait(
@@ -2039,14 +2009,14 @@ class JobProcessor(QThread):
                 self.job_failed_signal.emit(job_name, error_msg)
                 break  # Abort batch, batch_succeeded remains False
 
-            print(f"[DEBUG] Job '{job_name}' fully completed. Moving to next.")
+            print(f"[INFO] Job '{job_name}' fully completed. Moving to next.")
             self.msleep(1000)  # Small delay between jobs
         else:
             # This 'else' block executes ONLY if the 'for' loop
             # completes without a 'break' statement.
-            print("[DEBUG] JobProcessor loop completed without errors.")
+            print("[INFO] JobProcessor loop completed without errors.")
             self.batch_succeeded = True
 
         # --- 4. Finished ---
-        print("[DEBUG] Finished processing all jobs loop.")
+        print("[INFO] Finished processing all jobs loop.")
         self.all_jobs_done_signal.emit()

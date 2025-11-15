@@ -198,7 +198,7 @@ class DFMModelManager:
         """
         self.models_data.clear()
         if not os.path.isdir(self.models_path):
-            print(f"[Warning] DFM models directory not found at: {self.models_path}")
+            print(f"[WARN] DFM models directory not found at: {self.models_path}")
             return
 
         for dfm_file in os.listdir(self.models_path):
@@ -499,7 +499,7 @@ def get_video_rotation(media_path: str) -> int:
     """
     # Log when the check starts
     print(
-        f"[Info] Checking video rotation metadata for: {os.path.basename(media_path)}..."
+        f"[INFO] Checking video rotation metadata for: {os.path.basename(media_path)}..."
     )
     try:
         cmd = [
@@ -560,34 +560,34 @@ def get_video_rotation(media_path: str) -> int:
 
                 # Normalize common angles (90, 180, 270)
                 if 85 <= rotation_angle <= 95:
-                    print("Detected video rotation: 90°")
+                    print("[INFO] Detected video rotation: 90°")
                     return 90
                 if 175 <= rotation_angle <= 185:
-                    print("Detected video rotation: 180°")
+                    print("[INFO] Detected video rotation: 180°")
                     return 180
                 if 265 <= rotation_angle <= 275:
-                    print("Detected video rotation: 270°")
+                    print("[INFO] Detected video rotation: 270°")
                     return 270
 
                 print(
-                    f"[Info] Found rotation tag, but angle '{rotation_angle}' is not standard. Ignoring."
+                    f"[INFO] Found rotation tag, but angle '{rotation_angle}' is not standard. Ignoring."
                 )
             else:
                 print(
-                    "[Info] ffprobe ran, but no 'rotate' tag was found in stream (checked tags and side_data_list)."
+                    "[WARN] Ffprobe ran, but no 'rotate' tag was found in stream (checked tags and side_data_list)."
                 )
 
         else:
-            print("[Info] ffprobe ran, but no video streams were found.")
+            print("[WARN] Ffprobe ran, but no video streams were found.")
 
     except FileNotFoundError:
         print(
-            "[WARN] ffprobe command not found. Cannot check video rotation. Please ensure ffprobe is in your system's PATH."
+            "[ERROR] Ffprobe command not found. Cannot check video rotation. Please ensure ffprobe is in your system's PATH."
         )
     except Exception as e:
-        print(f"[WARN] Could not get video rotation metadata. Error: {e}")
+        print(f"[ERROR] Could not get video rotation metadata. Error: {e}")
 
-    print("[Info] No rotation metadata applied (returning 0).")
+    print("[INFO] No rotation metadata applied (returning 0).")
     return 0  # Default to 0
 
 
@@ -611,7 +611,9 @@ def benchmark(func):
         result = func(*args, **kwargs)  # Call the original function
         end_time = time.perf_counter()  # Record the end time
         elapsed_time = end_time - start_time  # Calculate elapsed time
-        print(f"Function '{func.__name__}' executed in {elapsed_time:.6f} seconds.")
+        print(
+            f"[INFO] Function '{func.__name__}' executed in {elapsed_time:.6f} seconds."
+        )
         return result  # Return the result of the original function
 
     return wrapper
@@ -702,11 +704,11 @@ def read_image_file(image_path):
         img_array = np.fromfile(image_path, np.uint8)
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)  # Always load as BGR
     except Exception as e:
-        print(f"Failed to load {image_path}: {e}")
+        print(f"[ERROR] Failed to load {image_path}: {e}")
         return None
 
     if img is None:
-        print("Failed to decode:", image_path)
+        print("[ERROR] Failed to decode:", image_path)
         return None
 
     return img  # Return BGR format
@@ -777,7 +779,7 @@ def get_output_file_path(
 
 def is_ffmpeg_in_path():
     if not cmd_exist("ffmpeg"):
-        print("FFMPEG Not found in your system!")
+        print("[ERROR] FFMPEG Not found in your system!")
         return False
     return True
 

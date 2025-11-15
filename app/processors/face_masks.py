@@ -26,57 +26,8 @@ class FaceMasks:
         self.clip_model_loaded = False
         self.active_models: set[str] = set()
 
-    def ensure_models_loaded(self):
-        print("FaceMasks.ensure_models_loaded called.")
-        with self.models_processor.model_lock:
-            # Occluder
-            if not self.models_processor.models.get("Occluder"):
-                self.models_processor.models["Occluder"] = (
-                    self.models_processor.load_model("Occluder")
-                )
-                if self.models_processor.models.get("Occluder"):
-                    self.active_models.add("Occluder")
-            else:  # Model already loaded, print message for consistency
-                print(
-                    f"Successfully loaded model: 'Occluder' with execution provider: '{self.models_processor.provider_name}'"
-                )
-                self.active_models.add(
-                    "Occluder"
-                )  # Ensure it's in active_models even if pre-loaded
-
-            # XSeg
-            if not self.models_processor.models.get("XSeg"):
-                self.models_processor.models["XSeg"] = self.models_processor.load_model(
-                    "XSeg"
-                )
-                if self.models_processor.models.get("XSeg"):
-                    self.active_models.add("XSeg")
-            else:  # Model already loaded, print message for consistency
-                print(
-                    f"Successfully loaded model: 'XSeg' with execution provider: '{self.models_processor.provider_name}'"
-                )
-                self.active_models.add(
-                    "XSeg"
-                )  # Ensure it's in active_models even if pre-loaded
-
-            # FaceParser
-            if not self.models_processor.models.get("FaceParser"):
-                self.models_processor.models["FaceParser"] = (
-                    self.models_processor.load_model("FaceParser")
-                )
-                if self.models_processor.models.get("FaceParser"):
-                    self.active_models.add("FaceParser")
-            else:  # Model already loaded, print message for consistency
-                print(
-                    f"Successfully loaded model: 'FaceParser' with execution provider: '{self.models_processor.provider_name}'"
-                )
-                self.active_models.add(
-                    "FaceParser"
-                )  # Ensure it's in active_models even if pre-loaded
-
     def unload_models(self):
         """Unloads all models managed by this class."""
-        print("FaceMasks: Unloading models.")
         with self.models_processor.model_lock:
             # Iterate over a copy of the set to allow modification
             for model_name in list(self.active_models):
@@ -156,7 +107,7 @@ class FaceMasks:
             buffer_ptr=output.data_ptr(),
         )
 
-        # --- START LAZY BUILD CHECK ---
+        # --- LAZY BUILD CHECK ---
         is_lazy_build = self.models_processor.check_and_clear_pending_build(model_name)
         if is_lazy_build:
             # Use the 'model_name' variable for a reliable dialog message
@@ -174,7 +125,6 @@ class FaceMasks:
         finally:
             if is_lazy_build:
                 self.models_processor.hide_build_dialog.emit()
-        # --- END LAZY BUILD CHECK ---
 
     def apply_dfl_xseg(self, img, amount, mouth, parameters):
         amount2 = -parameters["DFLXSeg2SizeSlider"]
@@ -209,15 +159,15 @@ class FaceMasks:
         if amount > 0:
             r = int(amount)
             k = 2 * r + 1
-            # einmalige Dilatation um Radius r
+            # single dilation by radius r
             outpred = F.max_pool2d(outpred, kernel_size=k, stride=1, padding=r)
-            # falls nötig, wieder auf [0,1] clampen
+            # clamp to [0,1] if necessary
             outpred = outpred.clamp(0, 1)
 
         elif amount < 0:
             r = int(-amount)
             k = 2 * r + 1
-            # Erosion = invertieren → dilatieren → invertieren
+            # Erosion = invert -> dilate -> invert
             outpred = 1 - outpred
             outpred = F.max_pool2d(outpred, kernel_size=k, stride=1, padding=r)
             outpred = 1 - outpred
@@ -238,14 +188,14 @@ class FaceMasks:
             if amount2 > 0:
                 r2 = int(amount2)
                 k2 = 2 * r2 + 1
-                # Dilatation um Radius r2
+                # Dilation by radius r2
                 outpred2 = F.max_pool2d(outpred2, kernel_size=k2, stride=1, padding=r2)
                 outpred2 = outpred2.clamp(0, 1)
 
             elif amount2 < 0:
                 r2 = int(-amount2)
                 k2 = 2 * r2 + 1
-                # Erosion = invertieren → dilatieren → invertieren
+                # Erosion = invert -> dilate -> invert
                 outpred2 = 1 - outpred2
                 outpred2 = F.max_pool2d(outpred2, kernel_size=k2, stride=1, padding=r2)
                 outpred2 = 1 - outpred2
@@ -264,7 +214,6 @@ class FaceMasks:
                 gauss2 = self._blur_cache[blur_key2]
                 outpred2 = gauss2(outpred2)
 
-            # print("outpred, outpred2, mouth: ", outpred.shape, outpred2.shape, mouth.shape)
             # outpred2_autocolor = outpred2.clone()
             outpred[mouth > 0.01] = outpred2[mouth > 0.01]
 
@@ -277,7 +226,7 @@ class FaceMasks:
             if amount_calc > 0:
                 r2 = int(amount_calc)
                 k2 = 2 * r2 + 1
-                # Dilatation um Radius r2
+                # Dilation by radius r2
                 outpred_calc_dill = F.max_pool2d(
                     outpred_calc_dill, kernel_size=k2, stride=1, padding=r2
                 )
@@ -294,7 +243,7 @@ class FaceMasks:
             elif amount_calc < 0:
                 r2 = int(-amount_calc)
                 k2 = 2 * r2 + 1
-                # Erosion = invertieren → dilatieren → invertieren
+                # Erosion = invert -> dilate -> invert
                 outpred_calc_dill = 1 - outpred_calc_dill
                 outpred_calc_dill = F.max_pool2d(
                     outpred_calc_dill, kernel_size=k2, stride=1, padding=r2
@@ -338,7 +287,6 @@ class FaceMasks:
             buffer_ptr=output.data_ptr(),
         )
 
-        # --- START LAZY BUILD CHECK ---
         is_lazy_build = self.models_processor.check_and_clear_pending_build(model_name)
         if is_lazy_build:
             # Use the 'model_name' variable for a reliable dialog message
@@ -356,7 +304,6 @@ class FaceMasks:
         finally:
             if is_lazy_build:
                 self.models_processor.hide_build_dialog.emit()
-        # --- END LAZY BUILD CHECK ---
 
     def _faceparser_labels(self, img_uint8_3x512x512: torch.Tensor) -> torch.Tensor:
         """
@@ -396,7 +343,6 @@ class FaceMasks:
             out.data_ptr(),
         )
 
-        # --- START LAZY BUILD CHECK ---
         is_lazy_build = self.models_processor.check_and_clear_pending_build(model_name)
         if is_lazy_build:
             # Use the 'model_name' variable for a reliable dialog message
@@ -414,7 +360,6 @@ class FaceMasks:
         finally:
             if is_lazy_build:
                 self.models_processor.hide_build_dialog.emit()
-        # --- END LAZY BUILD CHECK ---
 
         labels_512 = out.argmax(dim=1).squeeze(0).to(torch.long)  # [512,512]
         # downscale to 256x256 with NEAREST (no mixed classes)
@@ -452,8 +397,8 @@ class FaceMasks:
         self, m: torch.Tensor, r: int, mode: str = "conv"
     ) -> torch.Tensor:
         """
-        Binärmaske dilatieren/erosion (r>0 / r<0). Erwartet [H,W] oder [1,1,H,W], arbeitet
-        jetzt problemlos mit H=W=256. "conv" nutzt kreisförmigen Kernel (präzise & schnell).
+        Dilate/erode binary mask (r>0 / r<0). Expects [H,W] or [1,1,H,W],
+        now works fine with H=W=256. "conv" uses a circular kernel (precise & fast).
         """
         if r == 0 or r == 1:
             return m
@@ -488,7 +433,7 @@ class FaceMasks:
     def _mask_from_labels_lut(
         self, labels: torch.Tensor, classes: list[int]
     ) -> torch.Tensor:
-        # labels jetzt [256,256]
+        # labels are now [256,256]
         lut = torch.zeros(19, device=labels.device, dtype=torch.float32)
         if classes:
             lut[torch.tensor(classes, device=labels.device, dtype=torch.long)] = 1.0
@@ -502,8 +447,8 @@ class FaceMasks:
         control: dict,
     ) -> dict:
         """
-        Arbeitet intern mit 256×256:
-          - FaceParser_mask: [1,128,128] (aus 256 heruntergerechnet)
+        Works internally with 256x256:
+          - FaceParser_mask: [1,128,128] (downscaled from 256)
           - mouth:           [256,256]
           - texture_mask:    [1,256,256]
         """
@@ -558,7 +503,7 @@ class FaceMasks:
             mouth = to512_bi(mouth.unsqueeze(0))
             result["mouth"] = (mouth.clamp(0, 1)).squeeze()
 
-        # ---------- FACEPARSER MASK (intern 256 -> out 128) ----------
+        # ---------- FACEPARSER MASK (internal 256 -> out 128) ----------
         if parameters.get("FaceParserEnableToggle", False):
             fp = torch.zeros((256, 256), device=device, dtype=torch.float32)
             face_classes = {
@@ -599,7 +544,7 @@ class FaceMasks:
                 gauss = transforms.GaussianBlur(b * 2 + 1, (b + 1) * 0.2)
                 fp = gauss(fp.unsqueeze(0).unsqueeze(0)).squeeze()
 
-            # (1 - Maske) und runterskalieren auf 128
+            # (1 - Mask) and downscale to 128
             mask128 = to128_bi((1.0 - fp).unsqueeze(0))  # [1,128,128]
             if parameters.get("FaceParserBlendSlider", 0) > 0:
                 mask128 = (mask128 + parameters["FaceParserBlendSlider"] / 100.0).clamp(
@@ -698,7 +643,6 @@ class FaceMasks:
             buffer_ptr=output_tensor.data_ptr(),
         )
 
-        # --- START LAZY BUILD CHECK ---
         is_lazy_build = self.models_processor.check_and_clear_pending_build(model_key)
         if is_lazy_build:
             # Use the 'model_key' variable for a reliable dialog message
@@ -717,15 +661,14 @@ class FaceMasks:
         finally:
             if is_lazy_build:
                 self.models_processor.hide_build_dialog.emit()
-        # --- END LAZY BUILD CHECK ---
 
         return output_tensor
 
     def run_CLIPs(self, img, CLIPText, CLIPAmount):
-        # Ottieni il dispositivo su cui si trova l'immagine
+        # Get the device the image is on
         device = img.device
 
-        # Controllo se la sessione CLIP è già stata inizializzata
+        # Check if the CLIP session is already initialized
         if not self.models_processor.clip_session:
             self.models_processor.clip_session = CLIPDensePredT(
                 version="ViT-B/16", reduce_dim=64, complex_trans_conv=True
@@ -737,15 +680,15 @@ class FaceMasks:
             )
             self.models_processor.clip_session.to(
                 device
-            )  # Sposta il modello sul dispositivo dell'immagine
+            )  # Move the model to the image's device
 
-        # Crea un mask tensor direttamente sul dispositivo dell'immagine
+        # Create a mask tensor directly on the image's device
         clip_mask = torch.ones((352, 352), device=device)
 
-        # L'immagine è già un tensore, quindi la converto a float32 e la normalizzo nel range [0, 1]
-        img = img.float() / 255.0  # Conversione in float32 e normalizzazione
+        # The image is already a tensor, so convert it to float32 and normalize to [0, 1]
+        img = img.float() / 255.0  # Conversion to float32 and normalization
 
-        # Rimuovi la parte ToTensor(), dato che img è già un tensore.
+        # Remove the ToTensor() part, since img is already a tensor.
         transform = transforms.Compose(
             [
                 transforms.Normalize(
@@ -755,29 +698,29 @@ class FaceMasks:
             ]
         )
 
-        # Applica la trasformazione all'immagine
+        # Apply the transformation to the image
         CLIPimg = transform(img).unsqueeze(0).contiguous().to(device)
 
-        # Se ci sono prompt CLIPText, esegui la predizione
+        # If there are CLIPText prompts, run prediction
         if CLIPText != "":
             prompts = CLIPText.split(",")
 
             with torch.no_grad():
-                # Esegui la predizione sulla sessione CLIP
+                # Run prediction on the CLIP session
                 preds = self.models_processor.clip_session(
                     CLIPimg.repeat(len(prompts), 1, 1, 1), prompts
                 )[0]
 
-            # Calcola la maschera CLIP usando la sigmoid e tieni tutto sul dispositivo
+            # Calculate the CLIP mask using sigmoid and keep everything on the device
             clip_mask = 1 - torch.sigmoid(preds[0][0])
             for i in range(len(prompts) - 1):
                 clip_mask *= 1 - torch.sigmoid(preds[i + 1][0])
 
-            # Applica la soglia sulla maschera
+            # Apply the threshold to the mask
             thresh = CLIPAmount / 100.0
             clip_mask = (clip_mask > thresh).float()
 
-        return clip_mask.unsqueeze(0)  # Ritorna il tensore torch direttamente
+        return clip_mask.unsqueeze(0)  # Return the torch tensor directly
 
     def soft_oval_mask(
         self, height, width, center, radius_x, radius_y, feather_radius=None
@@ -1019,11 +962,11 @@ class FaceMasks:
         middle_value,
         parameters,
     ):
-        # Kein permute nötig → [3, H, W]
+        # No permute needed -> [3, H, W]
 
         diff = torch.abs(swapped_face - original_face)
 
-        # Quantile (auf allen Kanälen)
+        # Quantile (on all channels)
         sample = diff.reshape(-1)
         sample = sample[torch.randint(0, sample.numel(), (50_000,), device=diff.device)]
         diff_max = torch.quantile(sample, 0.99)
@@ -1034,7 +977,7 @@ class FaceMasks:
         diff_norm = (diff - diff_min) / (diff_max - diff_min)
 
         diff_mean = diff_norm.mean(dim=0)  # [H, W]
-        # Direkt mit torch.where statt vielen Masken
+        # Directly use torch.where instead of multiple masks
         scale = diff_mean / lower_thresh
         result = torch.where(
             diff_mean < lower_thresh,
@@ -1071,7 +1014,7 @@ class FaceMasks:
         feature_layer,
         ExcludeVGGMaskEnableToggle,
     ):
-        # ### 1) Channels & Shape je Backbone/Layer definieren ###
+        # 1) Define Channels & Shape per Backbone/Layer
         feature_shapes = {
             # VGG16
             #'relu2_2':               (1, 128, 128, 128),
@@ -1089,7 +1032,7 @@ class FaceMasks:
         # load model from cache
         model_key = feature_layer
         if model_key not in self.models_processor.models:
-            # load_model erwartet nun exakt den gleichen string wie in models_data
+            # load_model now expects the exact string from models_data
             self.models_processor.models[model_key] = self.models_processor.load_model(
                 model_key
             )
@@ -1104,16 +1047,16 @@ class FaceMasks:
         swapped = preprocess(swapped_face)
         original = preprocess(original_face)
 
-        # 4) Ausgabe-Puffer in der richtigen Form anlegen ###
+        # 4) Create output buffers in the correct shape
         shape = feature_shapes[feature_layer]
         outpred = torch.empty(shape, dtype=torch.float32, device=swapped.device)
         outpred2 = torch.empty_like(outpred)
 
-        # 5) Onnx-Inferenz ###
+        # 5) Onnx-Inference
         swapped_feat = self.run_onnx(swapped, outpred, model_key)
         original_feat = self.run_onnx(original, outpred2, model_key)
 
-        # 6) Diff + Masking + Remapping wie gehabt ###
+        # 6) Diff + Masking + Remapping as before
         diff_map = torch.abs(swapped_feat - original_feat).mean(dim=1)[0]  # [128,128]
 
         diff_map = diff_map * swap_mask.squeeze(0)
@@ -1126,19 +1069,19 @@ class FaceMasks:
         diff_max = torch.quantile(sample, 0.99)
         diff_map = torch.clamp(diff_map, max=diff_max)
 
-        # 1) Normalisierung
+        # 1) Normalization
         diff_min, diff_max = diff_map.amin(), diff_map.amax()
         diff_norm = (diff_map - diff_min) / (diff_max - diff_min + 1e-6)
-        # (falls du diff_norm_texture wirklich separat brauchst, klon hier einmal:)
+        # (if you really need diff_norm_texture separately, clone here)
         diff_norm_texture = diff_norm.clone()
         if ExcludeVGGMaskEnableToggle:
             eps = 1e-6
-            # 2) Precompute Inverse-Bereiche (vermeidet Divisions-Op in jedem Pixel)
+            # 2) Precompute inverse ranges (avoids division per pixel)
             inv_lower = 1.0 / max(lower_thresh, eps)
             inv_mid = 1.0 / max((upper_thresh - lower_thresh), eps)
             inv_high = 1.0 / max((1.0 - upper_thresh), eps)
 
-            # 3) die drei linearen Ausdrücke
+            # 3) The three linear expressions
             res_low = lower_value + diff_norm * inv_lower * (middle_value - lower_value)
             res_mid = middle_value + (diff_norm - lower_thresh) * inv_mid * (
                 upper_value - middle_value
@@ -1147,7 +1090,7 @@ class FaceMasks:
                 1.0 - upper_value
             )
 
-            # 4) nur zwei where-Schritte statt drei
+            # 4) Only two where-steps instead of three
             result = torch.where(
                 diff_norm < lower_thresh,
                 res_low,

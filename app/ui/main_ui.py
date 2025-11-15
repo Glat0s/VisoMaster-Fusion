@@ -633,18 +633,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                         self.current_kv_tensors_map = kv_payload.get("kv_map")
                         if self.current_kv_tensors_map:
                             print(
-                                f"Successfully loaded K/V map from {new_kv_file_name} for {len(self.current_kv_tensors_map)} layers."
+                                f"[INFO] Successfully loaded K/V map from {new_kv_file_name} for {len(self.current_kv_tensors_map)} layers."
                             )
                         else:
-                            print(f"Warning: 'kv_map' not found in {new_kv_file_name}.")
+                            print(f"[WARN] 'kv_map' not found in {new_kv_file_name}.")
                             self.current_kv_tensors_map = None
                         self.model_loaded_signal.emit()
                     except Exception as e:
-                        print(f"Error loading K/V tensor file {kv_file_path}: {e}")
+                        print(
+                            f"[ERROR] Error loading K/V tensor file {kv_file_path}: {e}"
+                        )
                         self.current_kv_tensors_map = None
                         self.model_loaded_signal.emit()
                 else:
-                    print(f"K/V tensor file not found: {kv_file_path}")
+                    print(f"[ERROR] K/V tensor file not found: {kv_file_path}")
                     self.current_kv_tensors_map = None
             else:
                 self.current_kv_tensors_map = None
@@ -700,8 +702,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         current_swapper = self.control.get("FaceSwapperTypeSelection", "Inswapper128")
         active_arcface_model = self.models_processor.get_arcface_model(current_swapper)
 
-        print(f"Unload request for: {model_names}")
-        print(f"Keeping active model: {active_arcface_model}")
+        print(f"[INFO] Unload request for: {model_names}")
+        print(f"[INFO] Keeping active model: {active_arcface_model}")
 
         for model_name in model_names:
             # Do not unload the recognition model for the currently selected swapper
@@ -717,7 +719,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         common_widget_actions.update_gpu_memory_progressbar(self)
 
     def resizeEvent(self, event: QtGui.QResizeEvent):
-        # print("Called resizeEvent()")
+        # print("[INFO] Called resizeEvent()")
         super().resizeEvent(event)
         # Call the method to fit the image to the view whenever the window resizes
         if self.scene.items():
@@ -758,7 +760,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.swapfacesButton.click()
 
     def closeEvent(self, event):
-        print("MainWindow: closeEvent called.")
+        print("[INFO] MainWindow: closeEvent called.")
 
         self.video_processor.stop_processing()
         list_view_actions.clear_stop_loading_input_media(self)

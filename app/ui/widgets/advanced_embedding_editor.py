@@ -91,7 +91,7 @@ class FileLoader(QObject):
                             elif current_name and line.strip():
                                 embedding_data[current_name].append(line.strip())
             except Exception as e:
-                print(f"Error loading file {file_path}: {e}")
+                print(f"[ERROR] Error loading file {file_path}: {e}")
         self.finished.emit(embedding_data, file_type)
 
 

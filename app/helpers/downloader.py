@@ -35,14 +35,18 @@ def download_file(model_name: str, file_path: str, correct_hash: str, url: str) 
     # This avoids re-downloading large files unnecessarily.
     if Path(file_path).is_file():
         if check_file_integrity(file_path, correct_hash):
-            print(f"\nSkipping '{model_name}': file already exists and is valid.")
+            print(
+                f"\n[INFO] Skipping '{model_name}': file already exists and is valid."
+            )
             return True
         else:
             # If the file exists but is corrupt, remove it before downloading again.
-            print(f"\nFile '{file_path}' exists but is corrupt. Re-downloading...")
+            print(
+                f"\n[WARN] File '{file_path}' exists but is corrupt. Re-downloading..."
+            )
             os.remove(file_path)
 
-    print(f"\nDownloading '{model_name}' from {url}")
+    print(f"\n[INFO] Downloading '{model_name}' from {url}")
 
     # Use a for loop for a fixed number of retries. It's cleaner than a while loop with a counter.
     for attempt in range(1, MAX_DOWNLOAD_ATTEMPTS + 1):
@@ -70,26 +74,28 @@ def download_file(model_name: str, file_path: str, correct_hash: str, url: str) 
 
                 # After a successful download, verify the file's integrity.
                 if check_file_integrity(file_path, correct_hash):
-                    print(f"\nSuccessfully downloaded and verified '{model_name}'.")
-                    print(f"File saved at: {file_path}")
+                    print(
+                        f"\n[INFO] Successfully downloaded and verified '{model_name}'."
+                    )
+                    print(f"[INFO] File saved at: {file_path}")
                     return True  # Exit the function on success.
                 else:
                     print(
-                        f"\nDownload complete, but integrity check failed (Attempt {attempt}/{MAX_DOWNLOAD_ATTEMPTS})."
+                        f"\n[WARN] Download complete, but integrity check failed (Attempt {attempt}/{MAX_DOWNLOAD_ATTEMPTS})."
                     )
                     os.remove(file_path)  # Clean up the corrupt file before retrying.
 
         except requests.exceptions.RequestException as e:
             print(
-                f"\nAn error occurred during download (Attempt {attempt}/{MAX_DOWNLOAD_ATTEMPTS}): {e}"
+                f"\n[ERROR] An error occurred during download (Attempt {attempt}/{MAX_DOWNLOAD_ATTEMPTS}): {e}"
             )
 
         # This message will be shown if the loop continues to the next attempt.
         if attempt < MAX_DOWNLOAD_ATTEMPTS:
-            print("Retrying...")
+            print("[INFO] Retrying...")
 
     # This message is displayed only if all attempts have failed.
     print(
-        f"\nFailed to download '{model_name}' after {MAX_DOWNLOAD_ATTEMPTS} attempts."
+        f"\n[ERROR] Failed to download '{model_name}' after {MAX_DOWNLOAD_ATTEMPTS} attempts."
     )
     return False

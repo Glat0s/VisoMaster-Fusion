@@ -53,7 +53,7 @@ class FaceRestorers:
         if not ort_session:
             if model_name not in self._warned_models:
                 print(
-                    f"WARNING: Model '{model_name}' failed to load or is not available. This operation will be skipped."
+                    f"[WARN] Model '{model_name}' failed to load or is not available. This operation will be skipped."
                 )
                 self._warned_models.add(model_name)
             return None
@@ -72,7 +72,6 @@ class FaceRestorers:
             ort_session: The ONNX Runtime session instance.
             io_binding: The pre-configured IOBinding object.
         """
-        # --- START LAZY BUILD CHECK ---
         is_lazy_build = self.models_processor.check_and_clear_pending_build(model_name)
         if is_lazy_build:
             self.models_processor.show_build_dialog.emit(
@@ -94,7 +93,6 @@ class FaceRestorers:
         finally:
             if is_lazy_build:
                 self.models_processor.hide_build_dialog.emit()
-        # --- END LAZY BUILD CHECK ---
 
     def apply_facerestorer(
         self,
@@ -113,7 +111,6 @@ class FaceRestorers:
 
         # The model state (active_model_slot1/2) is now managed by
         # control_actions.handle_restorer_state_change and handle_model_selection_change.
-        # We remove the redundant logic from this function.
 
         temp = swapped_face_upscaled
         t512 = self.resize_transforms[512]
@@ -129,7 +126,7 @@ class FaceRestorers:
                 dst[:, 0] += 32.0
 
             elif restorer_det_type == "Reference":
-                # FIX: Instead of re-detecting landmarks, use the target_kps passed to the function.
+                # Instead of re-detecting landmarks, use the target_kps passed to the function.
                 if target_kps is None or len(target_kps) == 0:
                     print(
                         "[WARN] 'Reference' alignment selected, but no target landmarks (target_kps) were provided. Skipping restoration."
@@ -265,7 +262,7 @@ class FaceRestorers:
         model_name = "RefLDMVAEEncoder"
         ort_session = self.models_processor.models[model_name]
         if not ort_session:
-            error_msg = f"Error: VAE Encoder model '{model_name}' not loaded when run_vae_encoder was called. This model should be loaded by ModelsProcessor.ensure_denoiser_models_loaded()."
+            error_msg = f"[ERROR] VAE Encoder model '{model_name}' not loaded when run_vae_encoder was called. This model should be loaded by ModelsProcessor.ensure_denoiser_models_loaded()."
             print(error_msg)
             raise RuntimeError(
                 error_msg
@@ -314,7 +311,7 @@ class FaceRestorers:
         model_name = "RefLDMVAEDecoder"
         ort_session = self.models_processor.models[model_name]
         if not ort_session:
-            error_msg = f"Error: VAE Decoder model '{model_name}' not loaded when run_vae_decoder was called. This model should be loaded by ModelsProcessor.ensure_denoiser_models_loaded()."
+            error_msg = f"[ERROR] VAE Decoder model '{model_name}' not loaded when run_vae_decoder was called. This model should be loaded by ModelsProcessor.ensure_denoiser_models_loaded()."
             print(error_msg)
             raise RuntimeError(error_msg)
 
@@ -368,7 +365,7 @@ class FaceRestorers:
         if not ort_session:
             # Enhanced error reporting
             error_messages = [
-                f"Error: UNet model '{model_name}' not loaded when run_ref_ldm_unet was called."
+                f"[ERROR] UNet model '{model_name}' not loaded when run_ref_ldm_unet was called."
             ]
             error_messages.append(
                 "  This model should be loaded by ModelsProcessor.apply_denoiser_unet or a similar setup routine."

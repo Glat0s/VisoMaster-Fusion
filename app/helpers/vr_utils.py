@@ -170,7 +170,7 @@ class PerspectiveConverter:
             or processed_crop_torch_cxhxw_rgb_uint8.numel() == 0
         ):
             print(
-                f"stitch_single_perspective: processed_crop is None or empty. Skipping stitch for theta={theta}, phi={phi}."
+                f"[WARN] stitch_single_perspective: processed_crop is None or empty. Skipping stitch for theta={theta}, phi={phi}."
             )
             return
 

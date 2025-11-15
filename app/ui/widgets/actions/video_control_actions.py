@@ -273,7 +273,7 @@ def set_job_start_frame(main_window: "MainWindow"):
     main_window.job_marker_pairs.append((current_pos, None))
     main_window.videoSeekSlider.update()  # Trigger repaint to show the new marker
     print(
-        f"Job Start Marker added for pair {len(main_window.job_marker_pairs)} at Frame: {current_pos}"
+        f"[INFO] Job Start Marker added for pair {len(main_window.job_marker_pairs)} at Frame: {current_pos}"
     )
 
 
@@ -309,7 +309,7 @@ def set_job_end_frame(main_window: "MainWindow"):
     main_window.job_marker_pairs[last_pair_index] = (start_frame, current_pos)
     main_window.videoSeekSlider.update()  # Trigger repaint to show the new marker
     print(
-        f"Job End Marker added for pair {last_pair_index + 1} at Frame: {current_pos}"
+        f"[INFO] Job End Marker added for pair {last_pair_index + 1} at Frame: {current_pos}"
     )
 
 
@@ -335,7 +335,7 @@ def remove_video_slider_marker(main_window: "MainWindow"):
     for i, (start_frame, end_frame) in enumerate(main_window.job_marker_pairs):
         if start_frame == current_position or end_frame == current_position:
             print(
-                f"Removing Job Marker Pair {i + 1} ({start_frame}, {end_frame}) because marker found at position: {current_position}"
+                f"[INFO] Removing Job Marker Pair {i + 1} ({start_frame}, {end_frame}) because marker found at position: {current_position}"
             )
             removed_pair_indices.append(i)
             pair_removed = True
@@ -369,14 +369,14 @@ def add_marker(
 ):
     main_window.videoSeekSlider.add_marker_and_paint(position)
     main_window.markers[position] = {"parameters": parameters, "control": control}
-    print(f"Marker Added for Frame: {position}")
+    print(f"[INFO] Marker Added for Frame: {position}")
 
 
 def remove_marker(main_window: "MainWindow", position):
     if main_window.markers.get(position):
         main_window.videoSeekSlider.remove_marker_and_paint(position)
         main_window.markers.pop(position)
-        print(f"Marker Removed from position: {position}")
+        print(f"[INFO] Marker Removed from position: {position}")
 
 
 def move_slider_to_nearest_marker(main_window: "MainWindow", direction: str):
@@ -443,7 +443,7 @@ def remove_all_markers(main_window: "MainWindow"):
         remove_marker(main_window, marker_position)
     main_window.markers.clear()
     if main_window.job_marker_pairs:
-        print("Clearing job marker pairs.")
+        print("[INFO] Clearing job marker pairs.")
         main_window.job_marker_pairs.clear()
 
 
@@ -611,10 +611,10 @@ def play_video(main_window: "MainWindow", checked: bool):
     if checked and video_processor.file_type == "webcam":
         if video_processor.processing:
             print(
-                "play_video: Webcam already streaming. Stopping the stream before restarting."
+                "[WARN] Webcam already streaming. Stopping the stream before restarting."
             )
             video_processor.stop_processing()
-        print("play_video: Starting webcam stream processing.")
+        print("[INFO] Starting webcam stream processing.")
         set_play_button_icon_to_stop(main_window)
         video_processor.process_webcam()
         return
@@ -624,11 +624,11 @@ def play_video(main_window: "MainWindow", checked: bool):
             or video_processor.current_frame_number == video_processor.max_frame_number
         ):
             print(
-                "play_video: Video already playing. Stopping the current video before starting a new one."
+                "[WARN] Video already playing. Stopping the current video before starting a new one."
             )
             video_processor.stop_processing()
             return
-        print("play_video: Starting video processing.")
+        print("[INFO] Starting video processing.")
         set_play_button_icon_to_stop(main_window)
         video_processor.process_video()
     else:
@@ -665,7 +665,7 @@ def record_video(main_window: "MainWindow", checked: bool):
 
     if checked:
         if video_processor.processing or video_processor.is_processing_segments:
-            print("record_video: Processing already active. Request ignored.")
+            print("[WARN] Processing already active. Request ignored.")
             main_window.buttonMediaRecord.blockSignals(True)
             main_window.buttonMediaRecord.setChecked(True)
             main_window.buttonMediaRecord.blockSignals(False)
@@ -724,7 +724,7 @@ def record_video(main_window: "MainWindow", checked: bool):
                 return
             # --- Proceed with Default Recording ---
             print(
-                "Record button pressed: Starting default recording (full video or from slider)."
+                "[INFO] Record button pressed: Starting default recording (full video or from slider)."
             )
             set_record_button_icon_to_stop(main_window)
             # Disable play button during recording
@@ -736,7 +736,9 @@ def record_video(main_window: "MainWindow", checked: bool):
                 main_window.videoSeekSlider.blockSignals(True)
                 main_window.videoSeekSlider.setValue(0)
                 main_window.videoSeekSlider.blockSignals(False)
-                print("Batch processing: Forcing video record to start from frame 0.")
+                print(
+                    "[INFO] Batch processing: Forcing video record to start from frame 0."
+                )
 
             video_processor.process_video()  # CALL THE DEFAULT PROCESSOR
 
@@ -764,18 +766,17 @@ def record_video(main_window: "MainWindow", checked: bool):
                     return  # Stop if invalid
                 else:
                     valid_pairs.append(pair)
-            # --- End Validation ---
 
             # Proceed if we have valid marker pairs
             if valid_pairs:
                 print(
-                    f"Record button pressed: Starting multi-segment recording for {len(valid_pairs)} segment(s)."
+                    f"[INFO] Record button pressed: Starting multi-segment recording for {len(valid_pairs)} segment(s)."
                 )
                 set_record_button_icon_to_stop(main_window)
                 # Disable play button during segment recording
                 main_window.buttonMediaPlay.setEnabled(False)
                 is_job_context = job_mgr_flag
-                print(f"[DEBUG] record_video: job_mgr_flag = {is_job_context}")
+                print(f"[INFO] Is job manager flag = {is_job_context}")
                 video_processor.start_multi_segment_recording(
                     valid_pairs, triggered_by_job_manager=is_job_context
                 )
@@ -791,19 +792,19 @@ def record_video(main_window: "MainWindow", checked: bool):
     else:
         if video_processor.is_processing_segments:
             print(
-                "Record button released: User requested stop during segment processing. Finalizing..."
+                "[INFO] Record button released: User requested stop during segment processing. Finalizing..."
             )
             # Finalize segment concatenation with segments processed so far
             video_processor.finalize_segment_concatenation()
         elif video_processor.recording:  # Check if default style recording was active
             print(
-                "Record button released: User requested stop during default recording. Finalizing..."
+                "[INFO] Record button released: User requested stop during default recording. Finalizing..."
             )
             # Finalize the default style recording
             video_processor._finalize_default_style_recording()
         else:
             # No recording was active (maybe an immediate click-off or already stopped)
-            print("Record button released: No active recording found.")
+            print("[WARN] Record button released: No active recording found.")
             set_record_button_icon_to_play(main_window)
             main_window.buttonMediaPlay.setEnabled(True)
             reset_media_buttons(main_window)
@@ -868,9 +869,7 @@ def on_change_video_seek_slider(main_window: "MainWindow", new_position=0):
 
     was_processing = video_processor.stop_processing()
     if was_processing:
-        print(
-            "on_change_video_seek_slider: Processing in progress. Stopping current processing."
-        )
+        print("[WARN] Processing in progress. Stopping current processing.")
 
     video_processor.current_frame_number = new_position
     video_processor.next_frame_to_display = new_position
@@ -879,8 +878,7 @@ def on_change_video_seek_slider(main_window: "MainWindow", new_position=0):
 
         # Read the raw frame without triggering the full pipeline.
         ret, frame = misc_helpers.read_frame(
-            video_processor.media_capture,
-            video_processor.media_rotation,  # MODIFICATION: Pass rotation
+            video_processor.media_capture, video_processor.media_rotation
         )
         if ret:
             # For preview, show the raw frame immediately.
@@ -932,7 +930,7 @@ def update_parameters_and_control_from_marker(
     main_window: "MainWindow", new_position: int
 ):
     # Find marker only at the *exact* new position
-    marker_data = _get_marker_data_for_position(main_window, new_position)  # New logic
+    marker_data = _get_marker_data_for_position(main_window, new_position)
     # Save the Global Marker Track toggle
     current_track_markers_value = main_window.control.get("TrackMarkersToggle", False)
 
@@ -1200,7 +1198,7 @@ def process_batch_images(main_window: "MainWindow", process_all_faces: bool):
         )
         return
 
-    # 4. Confirmation Dialog (MODIFIED)
+    # 4. Confirmation Dialog
     if process_all_faces:
         confirm_title = "Confirm Batch Swap (All Faces)"
         confirm_msg = (
@@ -1288,11 +1286,11 @@ def process_batch_images(main_window: "MainWindow", process_all_faces: bool):
                     frame_bgr = misc_helpers.read_image_file(media_path)
                     main_window.video_processor.max_frame_number = 0
                     main_window.video_processor.fps = 0
-                    # [FIX 1] Update the slider for images
+                    # Update the slider for images
                     main_window.videoSeekSlider.setMaximum(0)
 
                 elif file_type == "video":
-                    # MODIFICATION: Get rotation for batch processing
+                    # Get rotation for batch processing
                     rotation_angle = get_video_rotation(media_path)
                     main_window.video_processor.media_rotation = rotation_angle
                     media_capture = cv2.VideoCapture(media_path)
@@ -1306,7 +1304,7 @@ def process_batch_images(main_window: "MainWindow", process_all_faces: bool):
                         cv2.CAP_PROP_FPS
                     )
 
-                    # [FIX 1] Update the slider for this video
+                    # Update the slider for this video
                     main_window.videoSeekSlider.blockSignals(True)
                     main_window.videoSeekSlider.setMaximum(max_frames)
                     main_window.videoSeekSlider.blockSignals(False)
@@ -1362,7 +1360,6 @@ def process_batch_images(main_window: "MainWindow", process_all_faces: bool):
                         )
 
                     # --- Get and save the processed image ---
-                    # [MODIFICATION] - Le 'current_frame' du processeur est en BGR
                     frame = main_window.video_processor.current_frame
                     if not isinstance(frame, numpy.ndarray) or frame.size == 0:
                         frame_bgr_fallback = misc_helpers.read_image_file(media_path)
@@ -1418,7 +1415,7 @@ def process_batch_images(main_window: "MainWindow", process_all_faces: bool):
                         # Check for cancellation *inside* the video wait loop
                         if progress_dialog.wasCanceled():
                             print(
-                                f"Cancel detected during video processing: {media_path}. Aborting..."
+                                f"[WARN] Cancel detected during video processing: {media_path}. Aborting..."
                             )
                             # Call the 'abort' function
                             main_window.video_processor.stop_processing()
@@ -1426,20 +1423,22 @@ def process_batch_images(main_window: "MainWindow", process_all_faces: bool):
                             # so the loop will exit.
                             break
 
-                        QtCore.QThread.msleep(1)  # 2ms sleep
+                        QtCore.QThread.msleep(1)  # 1ms sleep
 
                     # 3. At this point, record_video has completed (or been aborted)
                     # We must check *again* if the loop was exited due to cancellation
                     # to avoid incorrectly incrementing the 'processed_count'.
                     if not progress_dialog.wasCanceled():
-                        print(f"Finished processing video: {media_path}")
+                        print(f"[INFO] Finished processing video: {media_path}")
                         processed_count += 1
                     else:
-                        print(f"Video processing was cancelled for: {media_path}")
+                        print(
+                            f"[WARN] Video processing was cancelled for: {media_path}"
+                        )
 
             except Exception as e:
                 # Log the error for this specific file and continue
-                print(f"Failed to process {media_path}: {e}")
+                print(f"[ERROR] Failed to process {media_path}: {e}")
                 traceback.print_exc()
                 failed_count += 1
                 # Ensure processing is stopped if an error occurred
@@ -1489,15 +1488,15 @@ def process_batch_images(main_window: "MainWindow", process_all_faces: bool):
         main_window.video_processor.file_type = original_file_type
         main_window.video_processor.current_frame_number = original_frame_num
 
-        # [FIX 3] Do not restore the old capture object
+        # Do not restore the old capture object
         main_window.video_processor.media_capture = None  # original_media_capture
 
         # Restore the view to its original state
         if main_window.video_processor.media_path:
             # Reload and re-process the frame that was active before the batch
             if main_window.video_processor.file_type == "video":
-                # --- MODIFICATION: Re-open the original video capture ---
-                print(f"Restoring original video capture: {original_media_path}")
+                # --- Re-open the original video capture ---
+                print(f"[INFO] Restoring original video capture: {original_media_path}")
                 new_capture = cv2.VideoCapture(original_media_path)
                 if new_capture and new_capture.isOpened():
                     main_window.video_processor.media_capture = new_capture
@@ -1514,11 +1513,11 @@ def process_batch_images(main_window: "MainWindow", process_all_faces: bool):
                     print(
                         f"[ERROR] Failed to re-open original media capture: {original_media_path}"
                     )
-                # --- FIN MODIFICATION ---
+
                 main_window.video_processor.process_current_frame(synchronous=True)
 
             elif main_window.video_processor.file_type == "image":
-                # [MODIFICATION] Correctly restore the slider for the image
+                # Correctly restore the slider for the image
                 main_window.videoSeekSlider.blockSignals(True)
                 main_window.videoSeekSlider.setMaximum(0)
                 main_window.videoSeekSlider.setValue(0)
@@ -1530,7 +1529,7 @@ def process_batch_images(main_window: "MainWindow", process_all_faces: bool):
             main_window.scene.clear()
             # Manually update graphics view to show nothing
             graphics_view_actions.update_graphics_view(main_window, QtGui.QPixmap(), 0)
-            # [MODIFICATION] Reset the slider
+            # Reset the slider
             main_window.videoSeekSlider.blockSignals(True)
             main_window.videoSeekSlider.setMaximum(0)
             main_window.videoSeekSlider.setValue(0)

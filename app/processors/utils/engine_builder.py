@@ -16,7 +16,7 @@ try:
 except ModuleNotFoundError:
     # Placeholder if tensorrt is not installed
     TRT_LOGGER = None
-    print("Warning: The tensorrt module was not found. The code will not run.")
+    print("[WARN] The tensorrt module was not found. The code will not run.")
 
 logging.basicConfig(level=logging.WARNING)
 logging.getLogger("EngineBuilder").setLevel(logging.WARNING)

@@ -129,7 +129,7 @@ class FrameWorker(threading.Thread):
 
                     if task is None:
                         # Poison pill received: Exit the loop
-                        print(f"{self.name} received poison pill. Exiting.")
+                        print(f"[INFO] {self.name} received poison pill. Exiting.")
                         break  # 'finally' will call task_done()
 
                     if self.stop_event.is_set():
@@ -157,7 +157,9 @@ class FrameWorker(threading.Thread):
                     continue
                 except Exception as e:
                     # An error happened *during* processing (process_and_emit_task)
-                    print(f"Error in {self.name} (frame {self.frame_number}): {e}")
+                    print(
+                        f"[ERROR] Error in {self.name} (frame {self.frame_number}): {e}"
+                    )
                     traceback.print_exc()
                     # We still need to mark the task as done in 'finally'
 
@@ -181,7 +183,7 @@ class FrameWorker(threading.Thread):
         else:
             # --- Single-Frame Mode ---
             if self.stop_event.is_set():
-                print(f"{self.name} cancelled before start.")
+                print(f"[WARN] {self.name} cancelled before start.")
                 return
             try:
                 # A Single-Frame worker (from manual edit or scrub)
@@ -207,7 +209,7 @@ class FrameWorker(threading.Thread):
                 # Just run the processing logic once
                 self.process_and_emit_task()
             except Exception as e:
-                print(f"Error in {self.name}: {e}")
+                print(f"[ERROR] Error in {self.name}: {e}")
                 traceback.print_exc()
 
     def process_and_emit_task(self):
@@ -258,7 +260,7 @@ class FrameWorker(threading.Thread):
 
             # If a stop was requested during processing, exit this task cleanly.
             if self.stop_event.is_set():
-                print(f"{self.name} cancelled during process_frame.")
+                print(f"[WARN] {self.name} cancelled during process_frame.")
                 return  # Eject from this task. The `run` loop will call task_done().
 
             # self.frame is now consistently BGR. It can be used for both pixmap creation and signal emission.
@@ -282,7 +284,7 @@ class FrameWorker(threading.Thread):
             # --- ALL QUEUE LOGIC IS REMOVED FROM HERE ---
 
         except Exception as e:
-            print(f"Error in {self.name} (frame {self.frame_number}): {e}")
+            print(f"[ERROR] Error in {self.name} (frame {self.frame_number}): {e}")
             traceback.print_exc()
 
     def tensor_to_pil(self, tensor):
@@ -317,7 +319,7 @@ class FrameWorker(threading.Thread):
             if use_exclusive_path:
                 if control.get("CommandLineDebugEnableToggle", False):
                     print(
-                        f"Denoiser {pass_suffix}: No source face for K/V, but 'Exclusive Reference Path' is ON. Skipping."
+                        f"[ERROR] Denoiser {pass_suffix}: No source face for K/V, but 'Exclusive Reference Path' is ON. Skipping."
                     )
                 return image_tensor_cxhxw_uint8
 
@@ -455,7 +457,7 @@ class FrameWorker(threading.Thread):
                 )
             except Exception as e_swap_core:
                 print(
-                    f"Error in swap_core for VR crop {eye_side_for_debug}: {e_swap_core}"
+                    f"[ERROR] Error in swap_core for VR crop {eye_side_for_debug}: {e_swap_core}"
                 )
                 traceback.print_exc()
                 swapped_face_512_torch_rgb_uint8 = cast(v2.Resize, self.t512)(
@@ -1993,7 +1995,7 @@ class FrameWorker(threading.Thread):
 
         # Expression Restorer beginning
         if (
-            parameters["FaceExpressionEnableToggleBoth"]
+            parameters["FaceExpressionEnableBothToggle"]
             and (
                 parameters["FaceExpressionLipsToggle"]
                 or parameters["FaceExpressionEyesToggle"]
@@ -2278,7 +2280,7 @@ class FrameWorker(threading.Thread):
 
         # Expression Restorer After First Restorer
         if (
-            parameters["FaceExpressionEnableToggleBoth"]
+            parameters["FaceExpressionEnableBothToggle"]
             and (
                 parameters["FaceExpressionLipsToggle"]
                 or parameters["FaceExpressionEyesToggle"]
@@ -2378,7 +2380,7 @@ class FrameWorker(threading.Thread):
 
         # Expression Restorer After Second Restorer
         if (
-            parameters["FaceExpressionEnableToggleBoth"]
+            parameters["FaceExpressionEnableBothToggle"]
             and (
                 parameters["FaceExpressionLipsToggle"]
                 or parameters["FaceExpressionEyesToggle"]
@@ -3291,40 +3293,40 @@ class FrameWorker(threading.Thread):
 
             # --- VARIABLE DEFINITION (Original Placement) ---
             driving_multiplier_eyes = parameters[
-                "FaceExpressionFriendlyFactorDecimalSliderEyes"
+                "FaceExpressionFriendlyFactorEyesDecimalSlider"
             ]  # Eyes slider
             driving_multiplier_lips = parameters[
-                "FaceExpressionFriendlyFactorDecimalSliderLips"
+                "FaceExpressionFriendlyFactorLipsDecimalSlider"
             ]  # Lips slider
 
             flag_activate_eyes = parameters["FaceExpressionEyesToggle"]
             flag_eye_retargeting = parameters[
-                "FaceExpressionRetargetingEyesEnableToggleBoth"
+                "FaceExpressionRetargetingEyesBothEnableToggle"
             ]
             eye_retargeting_multiplier = parameters[
-                "FaceExpressionRetargetingEyesMultiplierDecimalSliderBoth"
+                "FaceExpressionRetargetingEyesMultiplierBothDecimalSlider"
             ]
             flag_activate_lips = parameters["FaceExpressionLipsToggle"]
             flag_normalize_lip = parameters[
-                "FaceExpressionNormalizeLipsEnableToggleBoth"
+                "FaceExpressionNormalizeLipsBothEnableToggle"
             ]
             lip_normalize_threshold = parameters[
-                "FaceExpressionNormalizeLipsThresholdDecimalSliderBoth"
+                "FaceExpressionNormalizeLipsThresholdBothDecimalSlider"
             ]
             flag_normalize_eyes = parameters[
-                "FaceExpressionNormalizeEyesEnableToggleBoth"
+                "FaceExpressionNormalizeEyesBothEnableToggle"
             ]
             eyes_normalize_threshold = parameters[
-                "FaceExpressionNormalizeEyesThresholdDecimalSliderBoth"
+                "FaceExpressionNormalizeEyesThresholdBothDecimalSlider"
             ]
             flag_lip_retargeting = parameters[
-                "FaceExpressionRetargetingLipsEnableToggleBoth"
+                "FaceExpressionRetargetingLipsBothEnableToggle"
             ]
             lip_retargeting_multiplier = parameters[
-                "FaceExpressionRetargetingLipsMultiplierDecimalSliderBoth"
+                "FaceExpressionRetargetingLipsMultiplierBothDecimalSlider"
             ]
             eyes_normalize_max = parameters[
-                "FaceExpressionNormalizeEyesMaxDecimalSliderBoth"
+                "FaceExpressionNormalizeEyesMaxBothDecimalSlider"
             ]
             flag_relative_motion_eyes = parameters["FaceExpressionRelativeEyesToggle"]
             flag_relative_motion_lips = parameters["FaceExpressionRelativeLipsToggle"]
@@ -3349,8 +3351,8 @@ class FrameWorker(threading.Thread):
                 target,
                 source_lmk,
                 dsize=512,
-                scale=parameters["FaceExpressionCropScaleDecimalSliderBoth"],
-                vy_ratio=parameters["FaceExpressionVYRatioDecimalSliderBoth"],
+                scale=parameters["FaceExpressionCropScaleBothDecimalSlider"],
+                vy_ratio=parameters["FaceExpressionVYRatioBothDecimalSlider"],
                 interpolation=v2.InterpolationMode.BILINEAR,
             )
 

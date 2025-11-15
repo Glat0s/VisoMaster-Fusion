@@ -565,8 +565,8 @@ class VectorQuantizer2(nn.Module):
                 self.unknown_index = self.re_embed
                 self.re_embed = self.re_embed + 1
             print(
-                f"Remapping {self.n_e} indices to {self.re_embed} indices. "
-                f"Using {self.unknown_index} for unknown indices."
+                f"[INFO] Remapping {self.n_e} indices to {self.re_embed} indices. "
+                f"[INFO] Using {self.unknown_index} for unknown indices."
             )
         else:
             self.re_embed = n_e
@@ -712,11 +712,11 @@ class VQModelInterface(nn.Module):
         for k in keys:
             for ik in ignore_keys:
                 if k.startswith(ik):
-                    print(f"Deleting key {k} from state_dict.")
+                    print(f"[INFO] Deleting key {k} from state_dict.")
                     del sd[k]
         missing, unexpected = self.load_state_dict(sd, strict=False)
         print(
-            f"Restored VQGAN from {path} with {len(missing)} missing and {len(unexpected)} unexpected keys"
+            f"[INFO] Restored VQGAN from {path} with {len(missing)} missing and {len(unexpected)} unexpected keys"
         )
 
     def encode(self, x):
@@ -1293,11 +1293,11 @@ class KVExtractor:
             device (str): The device to run the model on ('cpu' or 'cuda').
         """
         self.device = torch.device(device)
-        print(f"Initializing KVExtractor on device: {self.device}")
+        print(f"[INFO] Initializing KVExtractor on device: {self.device}")
 
         self._validate_paths(model_config_path, model_ckpt_path, vae_ckpt_path)
 
-        print("Loading ReF-LDM model configuration...")
+        print("[INFO] Loading ReF-LDM model configuration...")
         model_config_full = OmegaConf.load(model_config_path)
         model_config_full.model.params.first_stage_config.params.ckpt_path = (
             vae_ckpt_path
@@ -1318,10 +1318,10 @@ class KVExtractor:
         # which is present in some VQGAN model configs. We pop it here to avoid an error.
         model_config_full.model.params.first_stage_config.params.pop("lossconfig", None)
 
-        print("Instantiating full ReF-LDM model (PyTorch)...")
+        print("[INFO] Instantiating full ReF-LDM model (PyTorch)...")
         self.model: LatentDiffusion = instantiate_from_config(model_config_full.model)
 
-        print(f"Loading ReF-LDM UNet weights from: {model_ckpt_path}")
+        print(f"[INFO] Loading ReF-LDM UNet weights from: {model_ckpt_path}")
         state_dict_container = torch.load(
             model_ckpt_path, map_location="cpu", weights_only=False
         )
@@ -1333,7 +1333,7 @@ class KVExtractor:
 
         missing, unexpected = self.model.load_state_dict(ldm_state_dict, strict=False)
         print(
-            f"Model loaded. Missing keys: {len(missing)}, Unexpected keys: {len(unexpected)}"
+            f"[WARN] Model loaded. Missing keys: {len(missing)}, Unexpected keys: {len(unexpected)}"
         )
 
         self.model.to(self.device)
@@ -1345,7 +1345,7 @@ class KVExtractor:
         for p in paths:
             if not os.path.exists(p):
                 raise FileNotFoundError(f"Required file not found: {p}")
-        print("All model files and configs found.")
+        print("[INFO] All model files and configs found.")
 
     @staticmethod
     def _normalize_image(image) -> torch.Tensor:
@@ -1378,13 +1378,15 @@ class KVExtractor:
         Extracts the K/V embedding from a single 512x512 reference image,
         which can be a PIL Image or a PyTorch Tensor.
         """
-        print("Extracting K/V from reference image...")
+        print("[INFO] Extracting K/V from reference image...")
 
         if color_match_image is not None:
             from app.processors.utils import faceutil
             from torchvision.transforms import v2
 
-            print("Applying color matching to reference image for K/V extraction.")
+            print(
+                "[INFO] Applying color matching to reference image for K/V extraction."
+            )
             if isinstance(image, Image.Image):
                 image_tensor = torch.from_numpy(np.array(image)).permute(2, 0, 1)
             else:
@@ -1442,13 +1444,13 @@ class KVExtractor:
         cache_kv_module.mode = None
 
         print(
-            f"Successfully extracted K/V for {len(extracted_kv_map)} attention layers."
+            f"[INFO] Successfully extracted K/V for {len(extracted_kv_map)} attention layers."
         )
         return extracted_kv_map
 
 
 if __name__ == "__main__":
-    print("--- Running KV Extractor Standalone ---")
+    print("[INFO] --- Running KV Extractor Standalone ---")
 
     if not all(
         os.path.exists(p)
@@ -1458,7 +1460,7 @@ if __name__ == "__main__":
             KVExtractor.DEFAULT_MODEL_CONFIG_PATH,
         ]
     ):
-        print("\nERROR: Default model/config files not found.")
+        print("\n[ERROR] Default model/config files not found.")
         print("Please ensure the following files are in your project directory:")
         print(f"  - {KVExtractor.DEFAULT_MODEL_CKPT_PATH}")
         print(f"  - {KVExtractor.DEFAULT_VAE_CKPT_PATH}")
@@ -1499,9 +1501,9 @@ if __name__ == "__main__":
                 print("   - No K/V embeddings were extracted.")
 
         except Exception as e:
-            print(f"\nAn error occurred during the demo: {e}")
+            print(f"\n[ERROR] An error occurred during the demo: {e}")
             import traceback
 
             traceback.print_exc()
 
-    print("\n--- Finished ---")
+    print("\n[INFO] --- Finished ---")

@@ -9,7 +9,6 @@ import numpy
 from PySide6 import QtCore as qtc
 from PySide6.QtGui import QPixmap
 
-from app.processors.models_data import detection_model_mapping, landmark_model_mapping
 from app.helpers import miscellaneous as misc_helpers
 from app.ui.widgets.actions import common_actions as common_widget_actions
 from app.ui.widgets.actions import filter_actions
@@ -173,54 +172,12 @@ class InputFacesLoaderWorker(qtc.QThread):
         self.face_ids = face_ids or []
         self._running = True  # Flag to control the running state
 
-    def _ensure_models_loaded(self):
-        """
-        Loads all models required for this worker's operations synchronously.
-        This method will block until loading is complete.
-        """
-        control = self.main_window.control.copy()
-        models_processor = self.main_window.models_processor
-        print("InputFacesLoaderWorker: Ensuring required models are loaded...")
-
-        # --- Handle Detection Model ---
-        detect_model_name = detection_model_mapping.get(
-            control["DetectorModelSelection"]
-        )
-        if detect_model_name:
-            models_processor.load_model(detect_model_name)
-
-        # --- Handle Landmark Model (if enabled) ---
-        if control.get("LandmarkDetectToggle", False):
-            landmark_model_name = landmark_model_mapping.get(
-                control["LandmarkDetectModelSelection"]
-            )
-            if landmark_model_name:
-                models_processor.load_model(landmark_model_name)
-
-        # --- Handle Selected Recognition Model ---
-        selected_recognition_model = control.get("RecognitionModelSelection")
-        if selected_recognition_model:
-            models_to_load = [selected_recognition_model]
-            # Special case for CSCS which uses two models for recognition
-            if selected_recognition_model == "CSCSArcFace":
-                models_to_load.append("CSCSIDArcFace")
-
-            for model_name in models_to_load:
-                models_processor.load_model(model_name)
-        else:
-            print(
-                "[WARN] InputFacesLoaderWorker: No recognition model selected in controls."
-            )
-
     def run(self):
         """
         Main worker thread execution. Loads models first, then processes files.
         """
         try:
-            # 1. Load all necessary models synchronously within this worker thread.
-            # self._ensure_models_loaded() # DISABLED to prevent pre-loading with default providers. Models will be loaded on-demand.
-
-            # 2. Proceed with file processing now that models are ready.
+            # Proceed with file processing now that models are ready.
             if self.folder_name or self.files_list:
                 self.main_window.placeholder_update_signal.emit(
                     self.main_window.inputFacesList, True
@@ -230,7 +187,7 @@ class InputFacesLoaderWorker(qtc.QThread):
                     self.main_window.inputFacesList, False
                 )
         except Exception as e:
-            print(f"ERROR in InputFacesLoaderWorker: {e}")
+            print(f"[ERROR] Error in InputFacesLoaderWorker: {e}")
             traceback.print_exc()
         finally:
             self.finished.emit()

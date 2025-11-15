@@ -96,7 +96,7 @@ def toggle_virtualcam(main_window: "MainWindow", toggle_value=False):
 def enable_virtualcam(main_window: "MainWindow", backend):
     # Only attempt to enable if the main toggle is actually checked
     if main_window.control.get("SendVirtCamFramesEnableToggle", False):
-        print("Backend: ", backend)
+        print("[INFO] Backend: ", backend)
         main_window.video_processor.enable_virtualcam(backend=backend)
 
 
@@ -154,21 +154,23 @@ def handle_denoiser_state_change(
 
     # 4. Load or Unload models based on the correct final state.
     if any_denoiser_will_be_active:
-        print("At least one denoiser pass is active. Ensuring UNet/VAEs are loaded.")
+        print(
+            "[INFO] At least one denoiser pass is active. Ensuring UNet/VAEs are loaded."
+        )
         main_window.models_processor.ensure_denoiser_models_loaded()
 
         # The KV Extractor is ONLY needed if a pass is active AND the exclusive path is enabled.
         if is_now_exclusive_path_enabled:
-            print("Exclusive path is active. Ensuring KV Extractor is loaded.")
+            print("[INFO] Exclusive path is active. Ensuring KV Extractor is loaded.")
             main_window.models_processor.ensure_kv_extractor_loaded()
         else:
             # If the exclusive path is off, but a denoiser is still on, unload ONLY the KV Extractor.
-            print("Exclusive path is inactive. Unloading KV Extractor.")
+            print("[INFO] Exclusive path is inactive. Unloading KV Extractor.")
             main_window.models_processor.unload_kv_extractor()
     else:
         # If NO denoiser pass will be active, unload everything.
         print(
-            "All denoiser passes are inactive. Unloading all denoiser-related models."
+            "[INFO] All denoiser passes are inactive. Unloading all denoiser-related models."
         )
         main_window.models_processor.unload_denoiser_models()
         main_window.models_processor.unload_kv_extractor()
@@ -252,7 +254,7 @@ def handle_restorer_state_change(
             )
             if model_to_change == other_model:
                 print(
-                    f"Model '{model_to_change}' is already loaded by the other restorer slot. Skipping redundant load."
+                    f"[WARN] Model '{model_to_change}' is already loaded by the other restorer slot. Skipping redundant load."
                 )
             else:
                 main_window.models_processor.load_model(model_to_change)
@@ -274,7 +276,7 @@ def handle_restorer_state_change(
                 main_window.models_processor.unload_model(model_to_change)
             else:
                 print(
-                    f"Model '{model_to_change}' is still in use by the other restorer slot. Skipping unload."
+                    f"[WARN] Model '{model_to_change}' is still in use by the other restorer slot. Skipping unload."
                 )
             if active_model_attr:
                 setattr(face_restorers_manager, active_model_attr, None)
@@ -327,7 +329,7 @@ def handle_model_selection_change(
             main_window.models_processor.load_model(new_model_name)
         else:
             print(
-                f"Model '{new_model_name}' is already loaded by the other restorer slot. Skipping redundant load."
+                f"[WARN] Model '{new_model_name}' is already loaded by the other restorer slot. Skipping redundant load."
             )
 
         if active_model_attr:
@@ -350,7 +352,7 @@ def handle_landmark_state_change(
     if not new_value:
         # Toggle is OFF: Unload all landmark models EXCEPT essential ones (like 203)
         print(
-            "[Control Action] Landmark detection disabled. Unloading non-essential landmark models."
+            "[INFO] Landmark detection disabled. Unloading non-essential landmark models."
         )
         landmark_detectors.unload_models(keep_essential=True)
 
@@ -369,7 +371,7 @@ def handle_landmark_state_change(
 
         if model_to_load:
             print(
-                f"[Control Action] Landmark detection enabled. Loading selected model: {model_to_load}"
+                f"[INFO] Landmark detection enabled. Loading selected model: {model_to_load}"
             )
             models_processor.load_model(model_to_load)
             landmark_detectors.active_landmark_models.add(model_to_load)
@@ -402,9 +404,7 @@ def handle_landmark_model_selection_change(
         and old_model_name != new_model_name
         and old_model_name != MODEL_203_NAME
     ):
-        print(
-            f"[Control Action] Unloading previously selected landmark model: {old_model_name}"
-        )
+        print(f"[INFO] Unloading previously selected landmark model: {old_model_name}")
         models_processor.unload_model(old_model_name)
         # We also need to remove it from the active_landmark_models set
         if old_model_name in landmark_detectors.active_landmark_models:
@@ -412,7 +412,7 @@ def handle_landmark_model_selection_change(
 
     # If the main toggle is enabled, load the new model
     if is_enabled:
-        print(f"[Control Action] Loading selected landmark model: {new_model_name}")
+        print(f"[INFO] Loading selected landmark model: {new_model_name}")
         models_processor.load_model(new_model_name)
         landmark_detectors.active_landmark_models.add(new_model_name)
 
@@ -482,7 +482,7 @@ def _check_and_manage_face_editor_models(main_window: "MainWindow"):
 
     # 3. Check if the 'Enable Face Expression Restorer' parameter toggle is active
     is_expr_restore_active = main_window.current_widget_parameters.get(
-        "FaceExpressionEnableToggleBoth", False
+        "FaceExpressionEnableBothToggle", False
     )
 
     # The 'Edit Face' feature is only *truly* active if BOTH its buttons are on.
@@ -501,13 +501,13 @@ def _check_and_manage_face_editor_models(main_window: "MainWindow"):
         # We don't need to do anything here. The lazy-loader in
         # FrameWorker/FaceEditors will load them on first use.
         print(
-            "[Control Action] Face Editor/Expression Restorer is active. Models will be lazy-loaded on use."
+            "[INFO] Face Editor/Expression Restorer is active. Models will be lazy-loaded on use."
         )
         pass
     elif not any_editor_feature_active and models_are_currently_loaded:
         # NO feature is ON, but models *are* loaded. Unload them.
         print(
-            "[Control Action] Face Editor and Expression Restorer are inactive. Unloading LivePortrait models."
+            "[INFO] Face Editor and Expression Restorer are inactive. Unloading LivePortrait models."
         )
         models_processor.unload_face_editor_models()
 
@@ -522,7 +522,7 @@ def handle_face_editor_button_click(main_window: "MainWindow"):
 def handle_face_expression_toggle_change(
     main_window: "MainWindow", new_value: bool, control_name: str
 ):
-    """Called when the 'FaceExpressionEnableToggleBoth' parameter changes."""
+    """Called when the 'FaceExpressionEnableBothToggle' parameter changes."""
     # This function is called by the parameter change.
     # We just need to check the overall state.
     _check_and_manage_face_editor_models(main_window)

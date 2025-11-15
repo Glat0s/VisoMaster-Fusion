@@ -99,7 +99,7 @@ class FaceLandmarkDetectors:
     ):
         """
         Main dispatcher function to run a specific landmark detector.
-        ...
+        It handles model loading, caching, and calling the correct processing function.
         """
         kpss_5, kpss, scores = [], [], []
 
@@ -118,13 +118,11 @@ class FaceLandmarkDetectors:
             loaded_model_instance = self.models_processor.load_model(model_name)
             if loaded_model_instance:
                 self.active_landmark_models.add(model_name)
-                # This message will now only appear on the first-time load.
-                print(f"Successfully loaded model: {model_name}")
 
         # If model still not loaded (e.g., failed to load), print a warning and return empty
         if not loaded_model_instance:
             print(
-                f"WARNING: Landmark model '{model_name}' failed to load or is not available. Skipping detection."
+                f"[WARN] Landmark model '{model_name}' failed to load or is not available. Skipping detection."
             )
             return kpss_5, kpss, scores
 
@@ -259,9 +257,7 @@ class FaceLandmarkDetectors:
         # Failsafe: If load_model fails (e.g., file not found, TRT build fail),
         # model will be None. We must abort to prevent a crash.
         if model is None:
-            print(
-                f"[ERROR] _run_onnx_binding: Failed to get or load model '{model_name}'."
-            )
+            print(f"[ERROR] Failed to get or load model '{model_name}'.")
             # Return empty arrays matching the expected output structure (list of np.ndarray)
             # We must create dummy outputs based on output_names to avoid crashes upstream.
             # A simpler approach for now: return empty list, let caller handle it.
@@ -285,7 +281,7 @@ class FaceLandmarkDetectors:
         for name in output_names:
             io_binding.bind_output(name, self.models_processor.device)
 
-        # --- START LAZY BUILD CHECK ---
+        # --- LAZY BUILD CHECK ---
         is_lazy_build = self.models_processor.check_and_clear_pending_build(model_name)
         if is_lazy_build:
             # Use the 'model_name' variable for a reliable dialog message
@@ -307,7 +303,6 @@ class FaceLandmarkDetectors:
         finally:
             if is_lazy_build:
                 self.models_processor.hide_build_dialog.emit()
-        # --- END LAZY BUILD CHECK ---
 
         return net_outs
 
@@ -432,19 +427,16 @@ class FaceLandmarkDetectors:
         return face_landmark_68_5, face_landmark_68, face_landmark_68_score
 
     def detect_face_landmark_3d68(self, img, bbox, det_kpss, from_points=False):
-        # --- START: Added Dependency Check ---
         # Ensure the 'meanshape_68.pkl' dependency is loaded once
         if len(self.models_processor.mean_lmk) == 0:
             try:
                 with open(f"{models_dir}/meanshape_68.pkl", "rb") as f:
                     self.models_processor.mean_lmk = pickle.load(f)
-                print("INFO: 'FaceLandmark3d68' loading dependency 'meanshape_68.pkl'.")
             except Exception as e:
                 print(
                     f"[ERROR] Failed to load 'meanshape_68.pkl' for FaceLandmark3d68: {e}"
                 )
                 return [], [], []  # Cannot proceed without this
-        # --- END: Added Dependency Check ---
 
         aimg, _, IM = self._prepare_crop(
             img, bbox, det_kpss, from_points, target_size=192, warp_mode="arcface128"
@@ -595,17 +587,14 @@ class FaceLandmarkDetectors:
         return out_pts_5, out_pts, []
 
     def detect_face_landmark_478(self, img, bbox, det_kpss, from_points=False):
-        # --- START: Added Dependency Check (Moved to top) ---
         # Ensure the 'FaceBlendShapes' dependency is loaded before we proceed
         if not self.models_processor.models.get("FaceBlendShapes"):
-            print("INFO: 'FaceLandmark478' loading dependency 'FaceBlendShapes'.")
             # We use load_model, which handles caching. If it fails, it will return None.
             if not self.models_processor.load_model("FaceBlendShapes"):
                 print(
                     "[ERROR] Failed to load dependency 'FaceBlendShapes'. Aborting landmark detection."
                 )
                 return [], [], []  # Fail fast
-        # --- END: Added Dependency Check ---
 
         aimg, _, IM = self._prepare_crop(
             img,

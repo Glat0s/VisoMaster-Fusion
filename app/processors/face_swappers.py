@@ -37,19 +37,6 @@ class FaceSwappers:
             "CSCSIDArcFace",
         ]
 
-    def ensure_models_loaded(self):
-        with self.models_processor.model_lock:
-            for model_name in self.swapper_models:
-                if not self.models_processor.models.get(model_name):
-                    self.models_processor.models[model_name] = (
-                        self.models_processor.load_model(model_name)
-                    )
-            for model_name in self.arcface_models:
-                if not self.models_processor.models.get(model_name):
-                    self.models_processor.models[model_name] = (
-                        self.models_processor.load_model(model_name)
-                    )
-
     def unload_models(self):
         with self.models_processor.model_lock:
             for model_name in self.swapper_models:
@@ -83,7 +70,6 @@ class FaceSwappers:
             ort_session: The ONNX Runtime session instance.
             io_binding: The pre-configured IOBinding object.
         """
-        # --- START LAZY BUILD CHECK ---
         is_lazy_build = self.models_processor.check_and_clear_pending_build(model_name)
         if is_lazy_build:
             self.models_processor.show_build_dialog.emit(
@@ -104,7 +90,6 @@ class FaceSwappers:
         finally:
             if is_lazy_build:
                 self.models_processor.hide_build_dialog.emit()
-        # --- END LAZY BUILD CHECK ---
 
     def run_recognize_direct(
         self, img, kps, similarity_type="Opal", arcface_model="Inswapper128ArcFace"
@@ -119,7 +104,7 @@ class FaceSwappers:
 
         if not ort_session:
             print(
-                f"WARNING: ArcFace model '{arcface_model}' failed to load. Skipping recognition."
+                f"[WARN] ArcFace model '{arcface_model}' failed to load. Skipping recognition."
             )
             return None, None
 
@@ -270,7 +255,7 @@ class FaceSwappers:
         model_name = "CSCSArcFace"  # Define model_name
         model = self.models_processor.models.get(model_name)
         if not model:
-            print("ERROR: CSCSArcFace model not loaded in recognize_cscs.")
+            print("[ERROR] CSCSArcFace model not loaded in recognize_cscs.")
             return None, None
 
         io_binding = model.io_binding()
@@ -304,7 +289,7 @@ class FaceSwappers:
             model = self.models_processor.load_model(model_name)
 
         if not model:
-            print(f"WARNING: {model_name} model not loaded.")
+            print(f"[WARN] {model_name} model not loaded.")
             return np.array([])  # Return empty array on failure
 
         # Use preprocess_image_cscs when face_kps is not None. When it is None img is already preprocessed.
@@ -339,7 +324,7 @@ class FaceSwappers:
         model_name = "CSCS"  # Use the name from the models_list
         model = self._load_swapper_model(model_name)
         if not model:
-            print("ERROR: CSCS model not loaded.")
+            print("[ERROR] CSCS model not loaded.")
             return
 
         io_binding = model.io_binding()
@@ -384,7 +369,7 @@ class FaceSwappers:
             or not isinstance(self.models_processor.emap, np.ndarray)
             or self.models_processor.emap.size == 0
         ):
-            print("ERROR: emap could not be loaded for latent calculation.")
+            print("[ERROR] Emap could not be loaded for latent calculation.")
             n_e = source_embedding / l2norm(source_embedding)
             return n_e.reshape((1, -1))
 
@@ -398,7 +383,7 @@ class FaceSwappers:
         model_name = "Inswapper128"
         model = self._load_swapper_model(model_name)
         if not model:
-            print("ERROR: Inswapper128 model not loaded.")
+            print("[ERROR] Inswapper128 model not loaded.")
             return
 
         io_binding = model.io_binding()
@@ -441,7 +426,7 @@ class FaceSwappers:
             or not isinstance(self.models_processor.emap, np.ndarray)
             or self.models_processor.emap.size == 0
         ):
-            print("emap not found, loading Inswapper128 to get it.")
+            print("[WARN] Emap not found, loading Inswapper128 to get it.")
             self.models_processor.load_model("Inswapper128")
 
         if (
@@ -449,7 +434,7 @@ class FaceSwappers:
             or not isinstance(self.models_processor.emap, np.ndarray)
             or self.models_processor.emap.size == 0
         ):
-            print("ERROR: emap could not be loaded for latent calculation.")
+            print("[ERROR] Emap could not be loaded for latent calculation.")
             n_e = source_embedding / l2norm(source_embedding)
             return n_e.reshape((1, -1))
 
@@ -463,7 +448,7 @@ class FaceSwappers:
         model_name = f"InStyleSwapper256 Version {version}"
         model = self._load_swapper_model(model_name)
         if not model:
-            print(f"ERROR: {model_name} model not loaded.")
+            print(f"[ERROR] {model_name} model not loaded.")
             return
 
         io_binding = model.io_binding()
@@ -505,7 +490,7 @@ class FaceSwappers:
         model_name = "SimSwap512"
         model = self._load_swapper_model(model_name)
         if not model:
-            print("ERROR: SimSwap512 model not loaded.")
+            print("[ERROR] SimSwap512 model not loaded.")
             return
 
         io_binding = model.io_binding()
@@ -549,12 +534,12 @@ class FaceSwappers:
             model_name, output_name = "GhostFacev3", "1549"
 
         if not model_name:
-            print(f"ERROR: Unknown GhostFace model version: {swapper_model}")
+            print(f"[ERROR] Unknown GhostFace model version: {swapper_model}")
             return
 
         ghostfaceswap_model = self._load_swapper_model(model_name)
         if not ghostfaceswap_model:
-            print(f"ERROR: {model_name} model not loaded.")
+            print(f"[ERROR] {model_name} model not loaded.")
             return
 
         io_binding = ghostfaceswap_model.io_binding()

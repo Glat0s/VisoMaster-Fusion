@@ -23,7 +23,7 @@ try:
 except ImportError:
     K = None  # Fallback if Kornia is not installed, can add error handling or power-law
     print(
-        "Warning: Kornia library not found. Color space conversions will use power-law approximation."
+        "[WARN] Kornia library not found. Color space conversions will use power-law approximation."
     )
 
 from PySide6 import QtCore
@@ -33,7 +33,7 @@ try:
 
     TENSORRT_AVAILABLE = True
 except ModuleNotFoundError:
-    print("No TensorRT Found")
+    print("[WARN] No TensorRT Found")
     TENSORRT_AVAILABLE = False
 
 from app.processors.utils.tensorrt_predictor import TensorRTPredictor
@@ -145,9 +145,7 @@ def _probe_onnx_model_worker(
         # (i.e., the engine build and serialization to disk)
         # are *fully* complete before this process exits.
         if torch.cuda.is_available():
-            print("[ONNX Prober]: Synchronizing CUDA to finalize engine build...")
             torch.cuda.synchronize()
-            print("[ONNX Prober]: Synchronization complete.")
 
         # If we get here, the load and the synchronization worked.
         del session
@@ -208,7 +206,6 @@ class ModelsProcessor(QtCore.QObject):
         # A lock to protect the creation of new locks in the dictionary above.
         self.trt_build_lock_creation_lock = threading.Lock()
         self.trt_ep_options = {
-            # 'trt_max_workspace_size': 3 << 30,  # Dimensione massima dello spazio di lavoro in bytes
             "trt_engine_cache_enable": True,
             "trt_engine_cache_path": "tensorrt-engines",
             "trt_timing_cache_enable": True,
@@ -221,7 +218,11 @@ class ModelsProcessor(QtCore.QObject):
         # A set to keep track of models that have been loaded but
         # have not had their engine built (lazy build).
         self.models_pending_build = set()
-        self.providers = [("CUDAExecutionProvider"), ("CPUExecutionProvider")]
+        self.providers = [
+            ("TensorrtExecutionProvider", self.trt_ep_options),
+            ("CUDAExecutionProvider"),
+            ("CPUExecutionProvider"),
+        ]
         self.syncvec = torch.empty((1, 1), dtype=torch.float32, device=self.device)
         self.nThreads = 1
 
@@ -241,10 +242,10 @@ class ModelsProcessor(QtCore.QObject):
 
         self.dfm_models: Dict[str, DFMModel] = {}
 
-        # MODIFICATION: Add a flag to bypass the 'KeepModelsAlive' check
+        # Add a flag to bypass the 'KeepModelsAlive' check
         self.force_unload_in_progress = False
 
-        # MODIFICATION: Initialize TRT dicts *outside* the check
+        # Initialize TRT dicts *outside* the check
         # This prevents AttributeError on systems without TensorRT
         self.models_trt: Dict[str, Optional[TensorRTPredictor]] = {}
         self.models_trt_path = {}
@@ -493,9 +494,7 @@ class ModelsProcessor(QtCore.QObject):
 
                 match = re.search(b"TensorrtExecutionProvider_.*?\\.engine", content)
                 if not match:
-                    print(
-                        f"Cache check: Context file '{ctx_file_name}' found, but no engine name inside."
-                    )
+                    # print(f"Cache check: Context file '{ctx_file_name}' found, but no engine name inside.")
                     return False
 
                 engine_name = match.group(0).decode("utf-8")
@@ -507,18 +506,14 @@ class ModelsProcessor(QtCore.QObject):
                 if os.path.exists(engine_file_path):
                     return True
                 else:
-                    print(
-                        f"Cache check: Context file '{ctx_file_name}' found, but engine '{engine_name}' is missing."
-                    )
+                    # print(f"Cache check: Context file '{ctx_file_name}' found, but engine '{engine_name}' is missing.")
                     return False
             else:
-                print(
-                    f"Cache check: No cache context file '{ctx_file_name}' found for {model_name}."
-                )
+                # print(f"Cache check: No cache context file '{ctx_file_name}' found for {model_name}.")
                 return False
 
         except Exception as e:
-            print(f"Error during TensorRT cache check: {e}")
+            print(f"[ERROR] Failed TensorRT cache check: {e}")
             return False
 
     def load_model(self, model_name, session_options=None):
@@ -547,7 +542,7 @@ class ModelsProcessor(QtCore.QObject):
                 )
                 if trt_model_info:
                     print(
-                        f"Provider is TensorRT-Engine, attempting to load TRT model for '{model_name}'..."
+                        f"[INFO] Provider is TensorRT-Engine, attempting to load TRT model for '{model_name}'..."
                     )
                     # This will build the engine if it doesn't exist.
                     model_instance = self.load_model_trt(model_name)
@@ -559,10 +554,8 @@ class ModelsProcessor(QtCore.QObject):
                         print(
                             f"[WARN] Failed to load/build TRT engine for '{model_name}'. Falling back to ONNX Runtime."
                         )
-                else:
-                    print(
-                        f"[INFO] No dedicated TRT engine for '{model_name}'. Using ONNX Runtime."
-                    )
+                # else:
+                # print(f"[INFO] No dedicated TRT engine for '{model_name}'. Using ONNX Runtime.")
 
             build_was_triggered = False
             is_tensorrt_load = any(
@@ -580,7 +573,7 @@ class ModelsProcessor(QtCore.QObject):
                     if not cache_is_valid:
                         build_was_triggered = True  # Mark that a build was attempted
                         print(
-                            f"TensorRT load detected for {model_name}. Running isolated probe..."
+                            f"[INFO] TensorRT load detected for {model_name}. Running isolated probe..."
                         )
 
                         try:
@@ -605,7 +598,7 @@ class ModelsProcessor(QtCore.QObject):
 
                             for attempt in range(max_retries):
                                 print(
-                                    f"Probe attempt {attempt + 1} of {max_retries} for {model_name}..."
+                                    f"[INFO] Probe attempt {attempt + 1} of {max_retries} for {model_name}..."
                                 )
 
                                 # Use 'spawn' context for CUDA/TRT safety
@@ -637,16 +630,16 @@ class ModelsProcessor(QtCore.QObject):
 
                                 if exitcode == 0:
                                     print(
-                                        f"Probe successful for {model_name}. Cache should be built."
+                                        f"[INFO] Probe successful for {model_name}. Cache should be built."
                                     )
                                     probe_successful = True
                                     break  # Exit the retry loop on success
                                 else:
                                     print(
-                                        f"Probe attempt {attempt + 1} failed with exit code {exitcode}."
+                                        f"[WARN] Probe attempt {attempt + 1} failed with exit code {exitcode}."
                                     )
                                     if attempt < max_retries - 1:
-                                        print("Retrying in 2 seconds...")
+                                        print("[INFO] Retrying in 2 seconds...")
                                         # time.sleep(2) would freeze the GUI.
                                         # We run a 2-second processEvents loop instead.
                                         start_time = time.time()
@@ -656,7 +649,7 @@ class ModelsProcessor(QtCore.QObject):
 
                             if not probe_successful:
                                 raise RuntimeError(
-                                    f"ONNX/TensorRT probe process failed after {max_retries} attempts. Last exit code: {last_exit_code}"
+                                    f"[ERROR] ONNX/TensorRT probe process failed after {max_retries} attempts. Last exit code: {last_exit_code}"
                                 )
 
                         except Exception:
@@ -664,9 +657,9 @@ class ModelsProcessor(QtCore.QObject):
                             # (The final 'finally' will also catch this, but this is safer)
                             self.hide_build_dialog.emit()
 
-                            print(f"ERROR: Isolated probe failed for {model_name}.")
+                            print(f"[ERROR] Isolated probe failed for {model_name}.")
                             print(
-                                "The model will not be loaded. This is likely a fatal TensorRT/CUDA error."
+                                "[ERROR] The model will not be loaded. This is likely a fatal TensorRT/CUDA error."
                             )
                             traceback.print_exc()
                             self.models[model_name] = (
@@ -693,32 +686,27 @@ class ModelsProcessor(QtCore.QObject):
                 # engine build, before we try to load it.
                 if build_was_triggered:
                     if torch.cuda.is_available():
-                        print(
-                            "Synchronizing with CUDA to ensure TRT engine is ready..."
-                        )
                         torch.cuda.synchronize()
-                        print("Synchronization complete.")
 
                     # Check cache AGAIN.
                     # If the probe succeeded BUT the cache STILL doesn't exist,
                     # it's a "Lazy Build" model.
                     if not self._check_tensorrt_cache(model_name, onnx_path):
                         print(
-                            f"[load_model]: Model {model_name} requires a lazy build (engine not found after probe)."
+                            f"[INFO] Model {model_name} requires a lazy build (engine not found after probe)."
                         )
-                        print("[load_model]: Adding to 'models_pending_build' set.")
                         self.models_pending_build.add(model_name)
 
                 # Race condition check
                 if self.models.get(model_name):
                     del model_instance
                     gc.collect()
-                    print(f"Unloaded model: {model_name} already in memory")
+                    print(f"[INFO] Unloaded model: {model_name} already in memory")
                     return self.models.get(model_name)
 
                 self.models[model_name] = model_instance
                 print(
-                    f"Loading model: {model_name} with provider: {self.provider_name}"
+                    f"[INFO] Loading model: {model_name} with provider: {self.provider_name}"
                 )
                 if model_name == "Inswapper128":
                     graph = onnx.load(self.models_path[model_name]).graph
@@ -736,7 +724,7 @@ class ModelsProcessor(QtCore.QObject):
 
             except Exception:
                 # This catch is still valuable for non-fatal errors
-                print(f"ERROR: Failed to load model {model_name} (even after probe).")
+                print(f"[ERROR] Failed to load model {model_name} (even after probe).")
                 traceback.print_exc()
                 if model_instance is not None:
                     del model_instance
@@ -762,7 +750,7 @@ class ModelsProcessor(QtCore.QObject):
         """
         if model_name in self.models_pending_build:
             print(
-                f"[Processor]: Model '{model_name}' is triggering its first-run lazy build."
+                f"[INFO] Model '{model_name}' is triggering its first-run lazy build."
             )
             self.models_pending_build.remove(model_name)
             return True
@@ -779,7 +767,7 @@ class ModelsProcessor(QtCore.QObject):
                 total_loaded_models = len(self.dfm_models)
                 # Ensure max_models_to_keep > 0 to avoid evicting when set to 0 (unlimited)
                 if total_loaded_models >= max_models_to_keep and max_models_to_keep > 0:
-                    print("Clearing DFM Model (max capacity reached)")
+                    print("[INFO] Clearing DFM Model (max capacity reached)")
                     model_name, model_instance = list(self.dfm_models.items())[0]
                     del model_instance
                     self.dfm_models.pop(model_name)
@@ -791,8 +779,7 @@ class ModelsProcessor(QtCore.QObject):
                     self.device,
                 )
             except Exception:  # Changed bare 'except:' to 'except Exception as e:'
-                print(f"ERROR: Failed to load DFM model {dfm_model}.")
-                print("Detailed error:")
+                print(f"[ERROR] Failed to load DFM model {dfm_model}.")
                 traceback.print_exc()
                 self.dfm_models[dfm_model] = None
             finally:
@@ -832,7 +819,7 @@ class ModelsProcessor(QtCore.QObject):
                 with model_build_lock:
                     if not os.path.exists(trt_path):
                         print(
-                            f"TRT engine file not found. Starting isolated build: {trt_path}"
+                            f"[WARN] TRT engine file not found. Starting isolated build: {trt_path}"
                         )
 
                         dialog_title = "Building TensorRT Engine"
@@ -861,16 +848,18 @@ class ModelsProcessor(QtCore.QObject):
 
                         if build_process.exitcode != 0:
                             raise RuntimeError(
-                                f"TRT engine build process failed or crashed with exit code {build_process.exitcode}."
+                                f"[ERROR] TRT engine build process failed or crashed with exit code {build_process.exitcode}."
                             )
 
                         if not os.path.exists(trt_path):
                             raise FileNotFoundError(
-                                f"TRT engine file still not found after isolated build: {trt_path}"
+                                f"[ERROR] TRT engine file still not found after isolated build: {trt_path}"
                             )
-                        print("Isolated build successful.")
+                        print("[INFO] Isolated build successful.")
 
-                print(f"Loading model: {model_name} with provider: TensorRT-Engine")
+                print(
+                    f"[INFO] Loading model: {model_name} with provider: TensorRT-Engine"
+                )
                 model_instance = TensorRTPredictor(
                     model_path=trt_path,
                     custom_plugin_path=custom_plugin_path,
@@ -878,13 +867,12 @@ class ModelsProcessor(QtCore.QObject):
                     device=self.device,
                     debug=debug,
                 )
-                print(f"Successfully loaded TRT model: {model_name}")
 
                 # Assign to the main dictionary *inside* the lock
                 self.models_trt[model_name] = model_instance
 
             except Exception:
-                print(f"ERROR: Failed to build or load TensorRT model {model_name}.")
+                print(f"[ERROR] Failed to build or load TensorRT model {model_name}.")
                 traceback.print_exc()
                 model_instance = None
 
@@ -914,7 +902,7 @@ class ModelsProcessor(QtCore.QObject):
         self.clip_session = []
 
     def unload_dfm_model(self, model_name_to_unload):
-        # MODIFICATION: Check if unloading should be skipped
+        # Check if unloading should be skipped
         if not self.force_unload_in_progress:
             if self.main_window.control.get("KeepModelsAliveToggle", False):
                 # print(f"[Info] KeepModelsAlive: Skipping unload for {model_name_to_unload}") # Optional debug
@@ -925,7 +913,7 @@ class ModelsProcessor(QtCore.QObject):
                 and model_name_to_unload in self.dfm_models
                 and self.dfm_models.get(model_name_to_unload) is not None
             ):
-                print(f"Successfully unloaded model: {model_name_to_unload}")
+                print(f"[INFO] Unloading DFM model: {model_name_to_unload}")
                 model_instance = self.dfm_models.pop(model_name_to_unload, None)
                 if model_instance:
                     del model_instance
@@ -934,7 +922,7 @@ class ModelsProcessor(QtCore.QObject):
                     torch.cuda.empty_cache()
 
     def unload_model(self, model_name_to_unload):
-        # MODIFICATION: Check if unloading should be skipped
+        # Check if unloading should be skipped
         if not self.force_unload_in_progress:
             if self.main_window.control.get("KeepModelsAliveToggle", False):
                 # print(f"[Info] KeepModelsAlive: Skipping unload for {model_name_to_unload}") # Optional debug
@@ -947,7 +935,7 @@ class ModelsProcessor(QtCore.QObject):
                 model_name_to_unload
                 and self.models.get(model_name_to_unload) is not None
             ):
-                print(f"Unloading ONNX model: {model_name_to_unload}")
+                print(f"[INFO] Unloading ONNX model: {model_name_to_unload}")
                 # Use pop to remove the key and get the object
                 model_instance = self.models.pop(model_name_to_unload, None)
                 if model_instance:
@@ -959,26 +947,26 @@ class ModelsProcessor(QtCore.QObject):
             if (
                 TENSORRT_AVAILABLE
                 and model_name_to_unload
-                # MODIFICATION: Check if key exists, not if value is not None
+                # Check if key exists, not if value is not None
                 # This handles the case where it's already unloaded (value is None)
                 and model_name_to_unload in self.models_trt
             ):
-                # MODIFICATION: Get the model instance *before* setting to None
+                # Get the model instance *before* setting to None
                 trt_model = self.models_trt.get(model_name_to_unload)
 
                 if trt_model is not None:  # Only run cleanup if it's actually loaded
-                    print(f"Unloading TRT-Engine model: {model_name_to_unload}")
+                    print(f"[INFO] Unloading TRT-Engine model: {model_name_to_unload}")
                     if isinstance(trt_model, TensorRTPredictor):
                         trt_model.cleanup()
                     del trt_model
                     unloaded = True
 
-                # MODIFICATION: Set key to None instead of popping to preserve it
+                # Set key to None instead of popping to preserve it
                 self.models_trt[model_name_to_unload] = None
 
             if unloaded:
                 # This block is now guaranteed to run after an unload.
-                print(f"Successfully unloaded model: {model_name_to_unload}")
+                # print(f"Successfully unloaded model: {model_name_to_unload}")
                 gc.collect()
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
@@ -1007,7 +995,7 @@ class ModelsProcessor(QtCore.QObject):
                     and provider_name == "TensorRT-Engine"
                 ):
                     print(
-                        "TensorRT-Engine provider cannot be used when TensorRT version is lower than 10.2.0."
+                        "[WARN] TensorRT-Engine provider cannot be used when TensorRT version is lower than 10.2.0."
                     )
                     provider_name = "TensorRT"
 
@@ -1017,7 +1005,6 @@ class ModelsProcessor(QtCore.QObject):
             case "CUDA":
                 providers = [("CUDAExecutionProvider"), ("CPUExecutionProvider")]
                 self.device = "cuda"
-            # case _:
 
         self.providers = providers
         self.provider_name = provider_name
@@ -1047,10 +1034,10 @@ class ModelsProcessor(QtCore.QObject):
         return memory_used, memory_total[0]
 
     def clear_gpu_memory(self):
-        print("Clearing GPU Memory: Unloading all models...")
+        print("[INFO] Clearing GPU Memory: Unloading all models...")
         self.main_window.video_processor.stop_processing()  # Ensure no workers are active
 
-        # MODIFICATION: Set the force_unload flag to bypass the 'KeepModelsAlive' check
+        # Set the force_unload flag to bypass the 'KeepModelsAlive' check
         self.force_unload_in_progress = True
         try:
             # Explicitly call unloaders for each category
@@ -1070,20 +1057,19 @@ class ModelsProcessor(QtCore.QObject):
             # Unload the Clip and KV Extractor models specifically
             self.unload_kv_extractor()
             if self.clip_session:
-                print("Unloading CLIP model.")
                 del self.clip_session
                 self.clip_session = []
         finally:
-            # MODIFICATION: Always reset the flag, even if an error occurs
+            # Always reset the flag, even if an error occurs
             self.force_unload_in_progress = False
 
         # Finally, clear caches
-        print("Running garbage collection and clearing CUDA cache.")
+        print("[INFO] Running garbage collection and clearing CUDA cache.")
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        print("GPU Memory Cleared.")
+        print("[INFO] GPU Memory Cleared.")
 
     def get_kv_map_for_face(
         self, input_face_image_pil: "Image.Image"
@@ -1105,14 +1091,16 @@ class ModelsProcessor(QtCore.QObject):
                 raise RuntimeError("KV Extractor model failed to load.")
 
             # 2. Perform the extraction
-            print("Extracting K/V from reference image...")
+            print("[INFO] Extracting K/V from reference image...")
             kv_map = self.kv_extractor.extract_kv(input_face_image_pil)
-            print(f"Successfully extracted K/V for {len(kv_map)} attention layers.")
+            print(
+                f"[INFO] Successfully extracted K/V for {len(kv_map)} attention layers."
+            )
 
         except Exception as e:
-            print(f"[ERROR] Failed during K/V extraction: {e}")
+            print(f"[ERROR] Failed the K/V extraction: {e}")
             traceback.print_exc()
-            kv_map = {}  # Retourne une map vide en cas d'échec
+            kv_map = {}  # Return empty map if failed
 
         finally:
             # 3. Unload the extractor
@@ -1130,7 +1118,7 @@ class ModelsProcessor(QtCore.QObject):
                 return  # Already loaded by another thread while this one was waiting
 
             try:
-                print("Loading KV Extractor...")
+                print("[INFO] Loading KV Extractor...")
 
                 base_path = "model_assets/ref-ldm_embedding"
                 configs_path = os.path.join(base_path, "configs")
@@ -1150,7 +1138,7 @@ class ModelsProcessor(QtCore.QObject):
                     full_path = os.path.join(base_path, rel_path)
                     if not is_file_exists(full_path):
                         print(
-                            f"Downloading ReF-LDM file: {os.path.basename(full_path)}..."
+                            f"[INFO] Downloading ReF-LDM file: {os.path.basename(full_path)}..."
                         )
                         download_file(os.path.basename(full_path), full_path, None, url)
 
@@ -1162,7 +1150,7 @@ class ModelsProcessor(QtCore.QObject):
                     os.path.exists(p) for p in [config_path, model_path, vae_path]
                 ):
                     print(
-                        "ReF-LDM model files not found even after download attempt. Cannot load KV Extractor."
+                        "[ERROR] ReF-LDM model files not found even after download attempt. Cannot load KV Extractor."
                     )
                     return  # Return early if files are missing
 
@@ -1172,9 +1160,9 @@ class ModelsProcessor(QtCore.QObject):
                     vae_ckpt_path=vae_path,
                     device=self.device,
                 )
-                print("KV Extractor loaded.")
+                print("[INFO] KV Extractor loaded.")
             except Exception as e:
-                print(f"Failed to load KV Extractor: {e}")
+                print(f"[ERROR] Failed to load KV Extractor: {e}")
                 traceback.print_exc()
                 self.kv_extractor = None
 
@@ -1197,23 +1185,23 @@ class ModelsProcessor(QtCore.QObject):
     def unload_denoiser_models(self):
         """Unloads the UNet and VAE models."""
         with self.model_lock:  # Ensure thread safety
-            print("Unloading denoiser models (UNet, VAEs)...")
+            print("[INFO] Unloading denoiser models (UNet, VAEs)...")
             self.unload_model(self.main_window.fixed_unet_model_name)
             self.unload_model("RefLDMVAEEncoder")
             self.unload_model("RefLDMVAEDecoder")
-            print("Denoiser models unloaded.")
+            # print("Denoiser models unloaded.")
 
     def unload_kv_extractor(self):
         """Unloads the KVExtractor model and clears associated memory."""
         with self.model_lock:
             if self.kv_extractor is not None:
-                print("Unloading KV Extractor...")
+                print("[INFO] Unloading KV Extractor...")
                 del self.kv_extractor
                 self.kv_extractor = None
                 gc.collect()
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
-                print("KV Extractor unloaded.")
+                # print("KV Extractor unloaded.")
 
     def unload_face_detector_models(self):
         with self.model_lock:
@@ -1227,17 +1215,9 @@ class ModelsProcessor(QtCore.QObject):
         with self.model_lock:
             self.face_editors.unload_models()
 
-    def ensure_face_mask_models_loaded(self):
-        with self.model_lock:
-            self.face_masks.ensure_models_loaded()
-
     def unload_face_mask_models(self):
         with self.model_lock:
             self.face_masks.unload_models()
-
-    def ensure_frame_enhancer_models_loaded(self):
-        with self.model_lock:
-            self.frame_enhancers.ensure_models_loaded()
 
     def unload_frame_enhancer_models(self):
         with self.model_lock:
@@ -1796,7 +1776,9 @@ class ModelsProcessor(QtCore.QObject):
                 and self.models.get(vae_encoder_name)
                 and self.models.get(vae_decoder_name)
             ):
-                print("Denoiser: Critical models (UNet/VAEs) not loaded. Skipping.")
+                print(
+                    "[ERROR] Denoiser: Critical models (UNet/VAEs) not loaded. Skipping."
+                )
                 return image_cxhxw_uint8
 
             kv_tensor_map_for_this_run: Dict[str, Dict[str, torch.Tensor]] | None = None
@@ -1815,7 +1797,7 @@ class ModelsProcessor(QtCore.QObject):
                     }
                 except Exception as e:
                     print(
-                        f"Denoiser: Error deep copying K/V map: {e}. Skipping denoiser pass."
+                        f"[ERROR] Denoiser: Error deep copying K/V map: {e}. Skipping denoiser pass."
                     )
                     return image_cxhxw_uint8
 
@@ -1825,7 +1807,7 @@ class ModelsProcessor(QtCore.QObject):
                 and not kv_tensor_map_for_this_run
             ):
                 print(
-                    "Denoiser (Full Restore): Reference K/V tensor file selected for use, but K/V map is empty. Skipping."
+                    "[ERROR] Denoiser (Full Restore): Reference K/V tensor file selected for use, but K/V map is empty. Skipping."
                 )
                 return image_cxhxw_uint8
             if (
@@ -1834,7 +1816,7 @@ class ModelsProcessor(QtCore.QObject):
                 and not kv_tensor_map_for_this_run
             ):
                 print(
-                    "Denoiser (Single Step): Reference K/V tensor file selected for use, but K/V map is empty. Skipping."
+                    "[ERROR] Denoiser (Single Step): Reference K/V tensor file selected for use, but K/V map is empty. Skipping."
                 )
                 return image_cxhxw_uint8
 
@@ -2066,7 +2048,7 @@ class ModelsProcessor(QtCore.QObject):
 
             else:
                 print(
-                    f"Denoiser: Unknown mode '{denoiser_mode}'. Skipping denoiser pass."
+                    f"[ERROR] Denoiser: Unknown mode '{denoiser_mode}'. Skipping denoiser pass."
                 )
                 return image_cxhxw_uint8
 

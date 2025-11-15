@@ -152,7 +152,7 @@ if not exist "%APP_DIR%\.git" (
             set "NEEDS_INSTALL=true"
             set "DOWNLOAD_RUN=false"
             popd
-            powershell -Command "(Get-Content '%CONFIG_FILE%') -replace 'DOWNLOAD_RUN=.*', 'DOWNLOAD_RUN=false' | Set-Content '%CONFIG_FILE%'"
+			powershell -Command "$configPath = '%CONFIG_FILE%'; $content = Get-Content -ErrorAction SilentlyContinue $configPath; if ($content -match 'DOWNLOAD_RUN=') { ($content -replace 'DOWNLOAD_RUN=.*', 'DOWNLOAD_RUN=false') | Set-Content -ErrorAction SilentlyContinue $configPath; } else { Add-Content -Path $configPath -Value 'DOWNLOAD_RUN=false'; }"
 
             :: SELF-UPDATE CHECK
             call :self_update_check
@@ -211,7 +211,7 @@ if /I "!DOWNLOAD_RUN!"=="false" (
     ::set "PYTHONPATH=%APP_DIR%"
     "%APP_PYTHON%" "download_models.py"
     if !ERRORLEVEL! equ 0 (
-        powershell -Command "(Get-Content -ErrorAction SilentlyContinue '%CONFIG_FILE%') -replace 'DOWNLOAD_RUN=.*', 'DOWNLOAD_RUN=true' | Set-Content -ErrorAction SilentlyContinue '%CONFIG_FILE%'"
+		powershell -Command "$configPath = '%CONFIG_FILE%'; $content = Get-Content -ErrorAction SilentlyContinue $configPath; if ($content -match 'DOWNLOAD_RUN=') { ($content -replace 'DOWNLOAD_RUN=.*', 'DOWNLOAD_RUN=true') | Set-Content -ErrorAction SilentlyContinue $configPath; } else { Add-Content -Path $configPath -Value 'DOWNLOAD_RUN=true'; }"
     )
     popd
 )

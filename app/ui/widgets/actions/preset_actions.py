@@ -79,7 +79,7 @@ def delete_preset(main_window: "MainWindow", item: "QListWidgetItem"):
     try:
         send2trash(delete_path)
         send2trash(delete_path_ctl)
-        print(f"Preset: {delete_preset} has been sent to the trash.")
+        print(f"[INFO] Preset: {delete_preset} has been sent to the trash.")
         refresh_presets_list(main_window)
 
     except Exception as e:

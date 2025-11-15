@@ -139,7 +139,7 @@ class FaceEditors:
                 buffer_ptr=tensor.data_ptr(),
             )
 
-        # --- START LAZY BUILD CHECK ---
+        # --- LAZY BUILD CHECK ---
         is_lazy_build = self.models_processor.check_and_clear_pending_build(model_name)
         if is_lazy_build:
             # Use the 'model_name' variable for a reliable dialog message
@@ -158,7 +158,6 @@ class FaceEditors:
         finally:
             if is_lazy_build:
                 self.models_processor.hide_build_dialog.emit()
-        # --- END LAZY BUILD CHECK ---
 
         return output_spec
 

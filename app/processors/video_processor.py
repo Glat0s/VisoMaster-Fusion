@@ -208,7 +208,7 @@ class VideoProcessor(QObject):
         :param is_first_start: True if this is the very first start (e.g., not a new segment).
         """
 
-        # 2. Determine timer interval
+        # Determine timer interval
         if target_fps <= 0:
             target_fps = 30.0  # Fallback
 
@@ -217,15 +217,15 @@ class VideoProcessor(QObject):
         else:
             self.target_delay_sec = 1.0 / target_fps
 
-        # 3. Start utility timers and emit signal
+        # Start utility timers and emit signal
         self.gpu_memory_update_timer.start(5000)
 
         if is_first_start:
-            self.processing_started_signal.emit()  # EMIT UNIFIED SIGNAL
+            self.processing_started_signal.emit()  # Emit unified signal
             # Record the time when the display *actually* starts
             self.playback_display_start_time = time.perf_counter()
 
-        # 4. Start the metronome loop
+        # Start the metronome loop
         self.last_display_schedule_time_sec = time.perf_counter()
         self.heartbeat_frame_counter = 0  # Reset heartbeat counter
         self.display_next_frame()  # Start the loop
@@ -249,7 +249,7 @@ class VideoProcessor(QObject):
             self.preroll_timer.stop()
             self.playback_started = True
             print(
-                f"Preroll buffer filled ({len(self.frames_to_display)} frames). Starting playback components..."
+                f"[INFO] Preroll buffer filled ({len(self.frames_to_display)} frames). Starting playback components..."
             )
 
             # Call the dedicated playback start function
@@ -257,7 +257,9 @@ class VideoProcessor(QObject):
 
         else:
             # Not ready yet, keep waiting
-            print(f"Buffering... {len(self.frames_to_display)} / {self.preroll_target}")
+            print(
+                f"[INFO] Buffering... {len(self.frames_to_display)} / {self.preroll_target}"
+            )
 
     def _feeder_loop(self):
         """
@@ -266,7 +268,7 @@ class VideoProcessor(QObject):
         based on the current processing mode.
         """
         print(
-            f"Feeder thread started (Mode: {self.file_type}, Segments: {self.is_processing_segments})."
+            f"[INFO] Feeder thread started (Mode: {self.file_type}, Segments: {self.is_processing_segments})."
         )
 
         # Determine which feed logic to use
@@ -285,7 +287,7 @@ class VideoProcessor(QObject):
         except Exception as e:
             print(f"[ERROR] Unhandled exception in feeder thread: {e}")
 
-        print("Feeder thread finished.")
+        print("[INFO] Feeder thread finished.")
 
     def _feed_video_loop(self):
         """
@@ -308,7 +310,7 @@ class VideoProcessor(QObject):
             return self.is_processing_segments if is_segment_mode else self.processing
 
         print(
-            f"Feeder: Starting video loop (Mode: {'Segment' if is_segment_mode else 'Standard'})."
+            f"[INFO] Feeder: Starting video loop (Mode: {'Segment' if is_segment_mode else 'Standard'})."
         )
 
         while stop_flag_check():
@@ -324,7 +326,7 @@ class VideoProcessor(QObject):
                         # Previously, this was a time.sleep(0.01) loop, which
                         # caused the thread to become an orphan.
                         print(
-                            f"Feeder: Reached end of segment {self.current_segment_index + 1}. Stopping feed."
+                            f"[INFO] Feeder: Reached end of segment {self.current_segment_index + 1}. Stopping feed."
                         )
                         break
                 else:  # Standard mode
@@ -338,8 +340,6 @@ class VideoProcessor(QObject):
                 if in_flight_frames >= self.max_display_buffer_size:
                     time.sleep(0.005)  # Wait 5ms (buffer full)
                     continue
-
-                # 3. Frame reading (identical)
 
                 # Check if we are in playback (not recording/segments)
                 is_playback = not self.recording and not self.is_processing_segments
@@ -366,7 +366,7 @@ class VideoProcessor(QObject):
 
                 ret, frame_bgr = misc_helpers.read_frame(
                     self.media_capture,
-                    self.media_rotation,  # MODIFICATION: Pass rotation
+                    self.media_rotation,
                     preview_target_height=preview_target_height,
                 )
                 if not ret:
@@ -388,7 +388,7 @@ class VideoProcessor(QObject):
                     if marker_data and marker_data != last_marker_data:
                         # This frame IS a marker, update the feeder's state
                         print(
-                            f"[Feeder] Frame {frame_num_to_process} is a marker. Updating feeder state."
+                            f"[INFO] Frame {frame_num_to_process} is a marker. Updating feeder state."
                         )
 
                         self.feeder_parameters = copy.deepcopy(
@@ -455,9 +455,7 @@ class VideoProcessor(QObject):
                     continue
 
                 ret, frame_bgr = misc_helpers.read_frame(
-                    self.media_capture,
-                    0,
-                    preview_target_height=None,  # MODIFICATION: Pass 0 for rotation
+                    self.media_capture, 0, preview_target_height=None
                 )
                 if not ret:
                     print("[WARN] Feeder: Failed to read webcam frame.")
@@ -516,13 +514,13 @@ class VideoProcessor(QObject):
                     and self.next_frame_to_display > self.current_segment_end_frame
                 ):
                     print(
-                        f"Segment {self.current_segment_index + 1} end frame ({self.current_segment_end_frame}) reached."
+                        f"[INFO] Segment {self.current_segment_index + 1} end frame ({self.current_segment_end_frame}) reached."
                     )
                     self.stop_current_segment()  # Segment logic handles its own stop
                     return
             elif self.next_frame_to_display > self.max_frame_number:
                 # --- Default Playback/Recording Stop Logic ---
-                print("End of media reached.")
+                print("[INFO] End of media reached.")
                 if self.recording:
                     should_finalize_default_recording = True
                 elif is_playback_loop_enabled:
@@ -591,7 +589,6 @@ class VideoProcessor(QObject):
             if frame_number_to_display not in self.frames_to_display:
                 # Frame not ready.
                 # If the buffer is not full, video will stutter.
-                # print(f"[DEBUG] Frame {frame_number_to_display} not in buffer. Display may stutter.")
                 return
             pixmap, frame = self.frames_to_display.pop(frame_number_to_display)
 
@@ -685,10 +682,12 @@ class VideoProcessor(QObject):
             value = 1
         # Stop processing if it's running, to apply the new count on next start
         if self.processing or self.is_processing_segments:
-            print(f"Setting thread count to {value}. Stopping active processing.")
+            print(
+                f"[INFO] Setting thread count to {value}. Stopping active processing."
+            )
             self.stop_processing()
         else:
-            print(f"Max Threads set as {value}. Will be applied on next run.")
+            print(f"[INFO] Max Threads set as {value}. Will be applied on next run.")
 
         self.main_window.models_processor.set_number_of_threads(value)
         self.num_threads = value
@@ -707,21 +706,21 @@ class VideoProcessor(QObject):
             # Custom FPS mode is DISABLED, use original
             self.fps = self.media_capture.get(cv2.CAP_PROP_FPS)
             if self.fps <= 0:
-                self.fps = 30  # Fallback
+                self.fps = 30
 
         # 2. Guards
-        if self.processing or self.is_processing_segments:  # Check both flags
+        if self.processing or self.is_processing_segments:
             print(
-                "Processing already in progress (play or segment). Ignoring start request."
+                "[INFO] Processing already in progress (play or segment). Ignoring start request."
             )
             return
 
         if self.file_type != "video":
-            print("process_video: Only applicable for video files.")
+            print("[WARN] Process video: Only applicable for video files.")
             return
 
         if not (self.media_capture and self.media_capture.isOpened()):
-            print("Error: Unable to open the video source.")
+            print("[ERROR] Unable to open the video source.")
             self.processing = False
             self.recording = False
             self.is_processing_segments = False
@@ -729,7 +728,7 @@ class VideoProcessor(QObject):
             return
 
         mode = "recording (default-style)" if self.recording else "playback"
-        print(f"Starting video {mode} processing setup...")
+        print(f"[INFO] Starting video {mode} processing setup...")
 
         # 3. Set State Flags
         self.processing = True  # General flag ON
@@ -745,7 +744,7 @@ class VideoProcessor(QObject):
         job_mgr_flag = getattr(self.main_window, "job_manager_initiated_record", False)
         if self.recording and job_mgr_flag:
             self.triggered_by_job_manager = True
-            print("Detected default-style recording initiated by Job Manager.")
+            print("[INFO] Detected default-style recording initiated by Job Manager.")
         else:
             self.triggered_by_job_manager = False
         try:
@@ -775,7 +774,7 @@ class VideoProcessor(QObject):
         self.frames_to_display.clear()
 
         # 6b. START WORKER POOL
-        print(f"Starting {self.num_threads} persistent worker thread(s)...")
+        print(f"[INFO] Starting {self.num_threads} persistent worker thread(s)...")
         # Ensure old workers are cleared (from a previous run)
         self.join_and_clear_threads()
         self.worker_threads = []
@@ -792,25 +791,23 @@ class VideoProcessor(QObject):
 
         # 7a. Get the target frame
         actual_start_frame = self.main_window.videoSeekSlider.value()
-        print(f"Sync: Seeking directly to frame {actual_start_frame}...")
+        print(f"[INFO] Sync: Seeking directly to frame {actual_start_frame}...")
 
         # 7b. Set the capture position
         misc_helpers.seek_frame(self.media_capture, actual_start_frame)
 
         # 7c. Read the frame using the LOCKED helper function ONCE for dimensions.
         print(
-            f"Sync: Reading frame {actual_start_frame} (for dimensions/state) using locked helper..."
+            f"[INFO] Sync: Reading frame {actual_start_frame} (for dimensions/state) using locked helper..."
         )
         ret, frame_bgr = misc_helpers.read_frame(
             self.media_capture,
-            self.media_rotation,  # MODIFICATION: Pass rotation
+            self.media_rotation,
             preview_target_height=None,
         )
-        print(f"Sync: Initial read complete (Result: {ret}).")
+        print(f"[INFO] Sync: Initial read complete (Result: {ret}).")
 
         if not ret:
-            # Fallback logic... (Keep your existing fallback logic here)
-            # ... [Fallback logic - attempts to read fallback_frame_to_try] ...
             fallback_frame = int(self.media_capture.get(cv2.CAP_PROP_POS_FRAMES))
             fallback_frame_to_try = max(0, fallback_frame - 1)
             print(
@@ -822,14 +819,12 @@ class VideoProcessor(QObject):
                 return
             self.media_capture.set(cv2.CAP_PROP_POS_FRAMES, fallback_frame_to_try)
             print(
-                f"Sync: Retrying read for frame {fallback_frame_to_try} using locked helper..."
+                f"[INFO] Sync: Retrying read for frame {fallback_frame_to_try} using locked helper..."
             )
             ret, frame_bgr = misc_helpers.read_frame(
-                self.media_capture,
-                self.media_rotation,
-                preview_target_height=None,  # MODIFICATION: Pass rotation
+                self.media_capture, self.media_rotation, preview_target_height=None
             )
-            print(f"Sync: Retry read complete (Result: {ret}).")
+            print(f"[INFO] Sync: Retry read complete (Result: {ret}).")
             if not ret:
                 print(
                     f"[ERROR] Capture failed definitively near frame {actual_start_frame}."
@@ -846,15 +841,12 @@ class VideoProcessor(QObject):
 
         # !!! CRITICAL: Reset position AGAIN so the feeder reads this frame too !!!
         print(
-            f"Sync: Resetting position to frame {actual_start_frame} for feeder thread..."
+            f"[INFO] Sync: Resetting position to frame {actual_start_frame} for feeder thread..."
         )
         misc_helpers.seek_frame(self.media_capture, actual_start_frame)
-        print("Sync: Position reset complete.")
+        print("[INFO] Sync: Position reset complete.")
 
-        # 7e. REMOVE SYNCHRONOUS PROCESSING STEP
-        # The feeder thread will now handle queueing frame 'actual_start_frame'
-
-        # 7f. Update counters - Feeder will start reading FROM actual_start_frame
+        # 7e. Update counters - Feeder will start reading FROM actual_start_frame
         self.next_frame_to_display = (
             actual_start_frame  # Display starts here once buffered
         )
@@ -869,28 +861,30 @@ class VideoProcessor(QObject):
         )
         if self.recording:
             print(
-                f"Recording audio start time set to: {self.play_start_time:.3f}s (Frame: {actual_start_frame})"
+                f"[INFO] Recording audio start time set to: {self.play_start_time:.3f}s (Frame: {actual_start_frame})"
             )
 
-        # 7g. Update the slider (if needed, ensure signals blocked/unblocked correctly)
+        # 7f. Update the slider (if needed, ensure signals blocked/unblocked correctly)
         self.main_window.videoSeekSlider.blockSignals(True)
         self.main_window.videoSeekSlider.setValue(actual_start_frame)
         self.main_window.videoSeekSlider.blockSignals(False)
 
         # --- 8. STARTING THE FEEDER THREAD AND METRONOME ---
-        print(f"Starting feeder thread (Mode: video, Recording: {self.recording})...")
+        print(
+            f"[INFO] Starting feeder thread (Mode: video, Recording: {self.recording})..."
+        )
         self.feeder_thread = threading.Thread(target=self._feeder_loop, daemon=True)
         self.feeder_thread.start()
 
         if self.recording:
             # Recording: start the display metronome immediately
-            print("Recording mode: Starting metronome immediately.")
+            print("[INFO] Recording mode: Starting metronome immediately.")
             self._start_metronome(9999.0, is_first_start=True)
         else:
             if self.main_window.control.get("VideoPlaybackBufferingToggle", False):
                 # Playback: start the preroll monitor
                 print(
-                    f"Playback mode: Waiting for preroll buffer (target: {self.preroll_target} frames)..."
+                    f"[INFO] Playback mode: Waiting for preroll buffer (target: {self.preroll_target} frames)..."
                 )
 
                 # Ensure the connection is clean (avoids multiple connections)
@@ -907,7 +901,7 @@ class VideoProcessor(QObject):
                 self.preroll_timer.start(100)
             else:
                 # Recording: start the display metronome immediately
-                print("Playback mode.")
+                print("[INFO] Playback mode.")
                 self._start_synchronized_playback()
 
     def start_frame_worker(
@@ -942,7 +936,7 @@ class VideoProcessor(QObject):
         """
         Process the single, currently selected frame (e.g., after seek or for image).
         This is a one-shot operation, not part of the metronome.
-        MODIFIED: Returns the worker instance and accepts synchronous flag.
+        Returns the worker instance and accepts synchronous flag.
         """
         if self.processing or self.is_processing_segments:
             print("[INFO] Stopping active processing to process single frame.")
@@ -964,9 +958,7 @@ class VideoProcessor(QObject):
         if self.file_type == "video" and self.media_capture:
             misc_helpers.seek_frame(self.media_capture, self.current_frame_number)
             ret, frame_bgr = misc_helpers.read_frame(
-                self.media_capture,
-                self.media_rotation,
-                preview_target_height=None,  # MODIFICATION: Pass rotation
+                self.media_capture, self.media_rotation, preview_target_height=None
             )
             if ret:
                 frame_to_process = frame_bgr[..., ::-1]  # BGR to RGB
@@ -977,12 +969,14 @@ class VideoProcessor(QObject):
                     f"[ERROR] Cannot read frame {self.current_frame_number} for single processing!"
                 )
                 self.main_window.last_seek_read_failed = True
+                """
+                # Stop the dialogue box from showing, this could break jobs and batches
                 self.main_window.display_messagebox_signal.emit(
                     "Error Reading Frame",
                     f"Error Reading Frame {self.current_frame_number}.",
                     self.main_window,
                 )
-
+                """
         elif self.file_type == "image":
             frame_bgr = misc_helpers.read_image_file(self.media_path)
             if frame_bgr is not None:
@@ -993,9 +987,7 @@ class VideoProcessor(QObject):
 
         elif self.file_type == "webcam" and self.media_capture:
             ret, frame_bgr = misc_helpers.read_frame(
-                self.media_capture,
-                0,
-                preview_target_height=None,  # MODIFICATION: Pass 0 for rotation
+                self.media_capture, 0, preview_target_height=None
             )
             if ret:
                 frame_to_process = frame_bgr[..., ::-1]  # BGR to RGB
@@ -1014,7 +1006,7 @@ class VideoProcessor(QObject):
                 synchronous=synchronous,
             )
 
-        return None  # <-- for failure case
+        return None
 
     def stop_processing(self):
         """
@@ -1027,7 +1019,7 @@ class VideoProcessor(QObject):
             video_control_actions.reset_media_buttons(self.main_window)
             return False  # Nothing was stopped
 
-        print("stop_processing called: Aborting active processing...")
+        print("[INFO] Aborting active processing...")
         was_processing_segments = self.is_processing_segments
         was_recording_default_style = self.recording
 
@@ -1042,18 +1034,16 @@ class VideoProcessor(QObject):
         self.preroll_timer.stop()
         self.stop_live_sound()
 
-        # --- MODIFICATION: Force feeder thread to stop BEFORE joining ---
-
         # 3a. Release the capture object.
         # This will cause the blocking read() in the feeder thread to fail (raising an exception),
         # which forces it to exit its loop, release any locks, and allow the join() to succeed.
-        print("Releasing media capture to unblock feeder thread...")
+        print("[INFO] Releasing media capture to unblock feeder thread...")
         if self.media_capture:
             misc_helpers.release_capture(self.media_capture)
             self.media_capture = None  # Important: set to None after release
 
         # 3b. Wait for the feeder thread (now it should exit quickly)
-        print("Waiting for feeder thread to complete...")
+        print("[INFO] Waiting for feeder thread to complete...")
         if self.feeder_thread and self.feeder_thread.is_alive():
             self.feeder_thread.join(timeout=3.0)  # Wait 3 seconds
             if self.feeder_thread.is_alive():
@@ -1061,13 +1051,12 @@ class VideoProcessor(QObject):
                     "[WARN] Feeder thread did not join gracefully even after capture release."
                 )
         self.feeder_thread = None
-        print("Feeder thread joined.")
-        # --- FIN MODIFICATION ---
+        print("[INFO] Feeder thread joined.")
 
         # 3c. Wait for worker threads
-        print("Waiting for worker threads to complete...")
+        print("[INFO] Waiting for worker threads to complete...")
         self.join_and_clear_threads()
-        print("Worker threads joined.")
+        print("[INFO] Worker threads joined.")
 
         # 4. Clear frame storage
         self.frames_to_display.clear()
@@ -1077,7 +1066,7 @@ class VideoProcessor(QObject):
 
         # 5. Stop and cleanup ffmpeg
         if self.recording_sp:
-            print("Closing and waiting for active FFmpeg subprocess...")
+            print("[INFO] Closing and waiting for active FFmpeg subprocess...")
             if self.recording_sp.stdin and not self.recording_sp.stdin.closed:
                 try:
                     self.recording_sp.stdin.close()
@@ -1085,7 +1074,7 @@ class VideoProcessor(QObject):
                     print(f"[WARN] Error closing ffmpeg stdin during abort: {e}")
             try:
                 self.recording_sp.wait(timeout=5)
-                print("FFmpeg subprocess terminated.")
+                print("[INFO] FFmpeg subprocess terminated.")
             except subprocess.TimeoutExpired:
                 print("[WARN] FFmpeg subprocess did not terminate gracefully, killing.")
                 self.recording_sp.kill()
@@ -1096,14 +1085,14 @@ class VideoProcessor(QObject):
 
         # 6. Cleanup temp files/dirs based on what was running
         if was_processing_segments:
-            print("Cleaning up segment temporary directory due to abort.")
+            print("[INFO] Cleaning up segment temporary directory due to abort.")
             self._cleanup_temp_dir()
         elif was_recording_default_style:
-            print("Cleaning up default-style temporary file due to abort.")
+            print("[INFO] Cleaning up default-style temporary file due to abort.")
             if self.temp_file and os.path.exists(self.temp_file):
                 try:
                     os.remove(self.temp_file)
-                    print(f"Removed temporary file: {self.temp_file}")
+                    print(f"[INFO] Removed temporary file: {self.temp_file}")
                 except OSError as e:
                     print(
                         f"[WARN] Could not remove temp file {self.temp_file} during abort: {e}"
@@ -1118,17 +1107,16 @@ class VideoProcessor(QObject):
         self.playback_display_start_time = 0.0  # Reset display start time
 
         # 8. Reset capture position
-        # MODIFICATION: Re-open the media capture since we released it
         if self.file_type == "video" and self.media_path:
             try:
-                print("Re-opening video capture...")
+                print("[INFO] Re-opening video capture...")
                 self.media_capture = cv2.VideoCapture(self.media_path)
                 if self.media_capture.isOpened():
                     current_slider_pos = self.main_window.videoSeekSlider.value()
                     self.current_frame_number = current_slider_pos
                     self.next_frame_to_display = current_slider_pos
                     misc_helpers.seek_frame(self.media_capture, current_slider_pos)
-                    print("Video capture re-opened and seeked.")
+                    print("[INFO] Video capture re-opened and seeked.")
                 else:
                     print("[WARN] Failed to re-open media capture after stop.")
                     self.media_capture = None
@@ -1138,9 +1126,8 @@ class VideoProcessor(QObject):
         elif self.file_type == "video":
             print("[WARN] media_path not set, cannot re-open video capture.")
         elif self.file_type == "webcam":
-            # Also re-open webcam
             try:
-                print("Re-opening webcam capture...")
+                print("[INFO] Re-opening webcam capture...")
                 webcam_index = int(
                     self.main_window.control.get("WebcamDeviceSelection", 0)
                 )
@@ -1157,7 +1144,7 @@ class VideoProcessor(QObject):
             layout_actions.enable_all_parameters_and_control_widget(self.main_window)
 
         # 10. Final cleanup
-        print("Clearing GPU Cache and running garbage collection.")
+        print("[INFO] Clearing GPU Cache and running garbage collection.")
         try:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -1172,14 +1159,14 @@ class VideoProcessor(QObject):
             self.disable_virtualcam()
         except Exception:
             pass
-        print("Processing aborted and cleaned up.")
+        print("[INFO] Processing aborted and cleaned up.")
 
         end_frame_for_calc = min(self.next_frame_to_display, self.max_frame_number + 1)
         self.play_end_time = (
             float(end_frame_for_calc / float(self.fps)) if self.fps > 0 else 0.0
         )
         print(
-            f"Calculated recording end time: {self.play_end_time:.3f}s (based on frame {end_frame_for_calc})"
+            f"[INFO] Calculated recording end time: {self.play_end_time:.3f}s (based on frame {end_frame_for_calc})"
         )
 
         # 11. Final Timing and Logging
@@ -1215,7 +1202,7 @@ class VideoProcessor(QObject):
         if not active_threads:
             return  # Nothing to do
 
-        print(f"Signaling {len(active_threads)} active worker(s) to stop...")
+        print(f"[INFO] Signaling {len(active_threads)} active worker(s) to stop...")
 
         # 1. Set stop event for all workers in the pool
         for thread in active_threads:
@@ -1301,7 +1288,7 @@ class VideoProcessor(QObject):
 
         # 1. Print formatted duration (overall processing time)
         formatted_duration = self._format_duration(processing_time_sec)
-        print(f"\nProcessing completed in {formatted_duration}")
+        print(f"\n[INFO] Processing completed in {formatted_duration}")
 
         # 2. Calculate and print FPS (based on actual display time)
         display_duration_sec = 0.0
@@ -1312,7 +1299,7 @@ class VideoProcessor(QObject):
         ):
             display_duration_sec = self.end_time - self.playback_display_start_time
             print(
-                f"(Actual display duration: {self._format_duration(display_duration_sec)})"
+                f"[INFO] (Actual display duration: {self._format_duration(display_duration_sec)})"
             )
         else:
             # Playback might have stopped during preroll or it was a recording-only task
@@ -1321,19 +1308,23 @@ class VideoProcessor(QObject):
             if (
                 self.start_time != self.playback_display_start_time
             ):  # Check if display never started
-                print("(Note: FPS calculation includes initial buffering/setup time)")
+                print(
+                    "[INFO] (Note: FPS calculation includes initial buffering/setup time)"
+                )
 
         try:
             if (
                 display_duration_sec > 0.01 and num_frames_processed > 0
             ):  # Use a small threshold for duration
                 avg_fps = num_frames_processed / display_duration_sec
-                print(f"Average Display FPS: {avg_fps:.2f}\n")
+                print(f"[INFO] Average Display FPS: {avg_fps:.2f}\n")
             elif num_frames_processed > 0:
-                print("Display duration too short to calculate meaningful FPS.\n")
+                print(
+                    "[WARN] Display duration too short to calculate meaningful FPS.\n"
+                )
             else:
                 print(
-                    "No frames were displayed or duration was zero, cannot calculate FPS.\n"
+                    "[WARN] No frames were displayed or duration was zero, cannot calculate FPS.\n"
                 )
         except Exception as e:
             print(f"[WARN] Could not calculate average FPS: {e}\n")
@@ -1411,16 +1402,16 @@ class VideoProcessor(QObject):
                 frame_height_down = math.ceil(frame_height / frame_width_down_mult)
                 frame_width_down = 1920
             else:
-                print("Already 1920*1080")
+                print("[WARN] Already 1920*1080")
 
         # 3. Output File Path and Logging
         if is_segment:
             segment_num = self.current_segment_index + 1
             print(
-                f"Creating FFmpeg (Segment {segment_num}): Video Dim={frame_width}x{frame_height}, FPS={self.fps}, Output='{output_filename}'"
+                f"[INFO] Creating FFmpeg (Segment {segment_num}): Video Dim={frame_width}x{frame_height}, FPS={self.fps}, Output='{output_filename}'"
             )
             print(
-                f"  Audio Segment: Start={start_time_sec:.3f}s, End={end_time_sec:.3f}s (Frames {start_frame}-{end_frame})"
+                f"[INFO] Audio Segment: Start={start_time_sec:.3f}s, End={end_time_sec:.3f}s (Frames {start_frame}-{end_frame})"
             )
 
             if Path(output_filename).is_file():
@@ -1439,7 +1430,7 @@ class VideoProcessor(QObject):
                 self.temp_file = os.path.join(
                     base_temp_dir, f"temp_output_{date_and_time}.mp4"
                 )
-                print(f"Default temp file will be created at: {self.temp_file}")
+                print(f"[INFO] Default temp file will be created at: {self.temp_file}")
             except Exception as e:
                 print(f"[ERROR] Failed to create temporary directory/file path: {e}")
                 self.temp_file = f"temp_output_{date_and_time}.mp4"
@@ -1448,7 +1439,7 @@ class VideoProcessor(QObject):
                 )
 
             print(
-                f"Creating FFmpeg : Video Dim={frame_width}x{frame_height}, FPS={self.fps}, Temp Output='{self.temp_file}'"
+                f"[INFO] Creating FFmpeg : Video Dim={frame_width}x{frame_height}, FPS={self.fps}, Temp Output='{self.temp_file}'"
             )
 
             if Path(self.temp_file).is_file():
@@ -1597,17 +1588,17 @@ class VideoProcessor(QObject):
 
     def _finalize_default_style_recording(self):
         """Finalizes a successful default-style recording (adds audio, cleans up)."""
-        print("Finalizing default-style recording...")
+        print("[INFO] Finalizing default-style recording...")
         self.processing = False  # Stop metronome
 
         # 1. Stop timers
         self.gpu_memory_update_timer.stop()
 
         # 2. Wait for final frames
-        print("Waiting for final worker threads...")
+        print("[INFO] Waiting for final worker threads...")
         self.join_and_clear_threads()
         self.frames_to_display.clear()
-        print("Clearing frame queue of residual pills...")
+        print("[INFO] Clearing frame queue of residual pills...")
         with self.frame_queue.mutex:
             self.frame_queue.queue.clear()
 
@@ -1615,14 +1606,14 @@ class VideoProcessor(QObject):
         if self.recording_sp:
             if self.recording_sp.stdin and not self.recording_sp.stdin.closed:
                 try:
-                    print("Closing FFmpeg stdin...")
+                    print("[INFO] Closing FFmpeg stdin...")
                     self.recording_sp.stdin.close()
                 except OSError as e:
                     print(f"[WARN] Error closing FFmpeg stdin during finalization: {e}")
-            print("Waiting for FFmpeg subprocess to finish writing...")
+            print("[INFO] Waiting for FFmpeg subprocess to finish writing...")
             try:
                 self.recording_sp.wait(timeout=10)
-                print("FFmpeg subprocess finished.")
+                print("[INFO] FFmpeg subprocess finished.")
             except subprocess.TimeoutExpired:
                 print(
                     "[WARN] FFmpeg subprocess timed out during finalization, killing."
@@ -1643,7 +1634,7 @@ class VideoProcessor(QObject):
             float(end_frame_for_calc / float(self.fps)) if self.fps > 0 else 0.0
         )
         print(
-            f"Calculated recording end time: {self.play_end_time:.3f}s (based on frame {end_frame_for_calc})"
+            f"[INFO] Calculated recording end time: {self.play_end_time:.3f}s (based on frame {end_frame_for_calc})"
         )
 
         # 5. Audio Merging
@@ -1686,7 +1677,7 @@ class VideoProcessor(QObject):
                 try:
                     # Added exist_ok=True for thread-safety
                     os.makedirs(output_dir, exist_ok=True)
-                    print(f"Created output directory: {output_dir}")
+                    print(f"[INFO] Created output directory: {output_dir}")
                 except OSError as e:
                     print(
                         f"[ERROR] Failed to create output directory {output_dir}: {e}"
@@ -1709,7 +1700,7 @@ class VideoProcessor(QObject):
                     return
 
             if Path(final_file_path).is_file():
-                print(f"Removing existing final file: {final_file_path}")
+                print(f"[INFO] Removing existing final file: {final_file_path}")
                 try:
                     os.remove(final_file_path)
                 except OSError as e:
@@ -1718,7 +1709,7 @@ class VideoProcessor(QObject):
                     )
 
             # 5b. Run FFmpeg audio merge command
-            print("Adding audio (default-style merge)...")
+            print("[INFO] Adding audio (default-style merge)...")
             args = [
                 "ffmpeg",
                 "-hide_banner",
@@ -1746,7 +1737,7 @@ class VideoProcessor(QObject):
             try:
                 subprocess.run(args, check=True)
                 print(
-                    f"--- Successfully created final video (default-style): {final_file_path} ---"
+                    f"[INFO] --- Successfully created final video (default-style): {final_file_path} ---"
                 )
             except subprocess.CalledProcessError as e:
                 print(
@@ -1765,7 +1756,7 @@ class VideoProcessor(QObject):
                 )
             finally:
                 # 5c. Clean up temp file
-                print(f"Removing temporary file: {self.temp_file}")
+                print(f"[INFO] Removing temporary file: {self.temp_file}")
                 try:
                     os.remove(self.temp_file)
                 except OSError as e:
@@ -1824,14 +1815,14 @@ class VideoProcessor(QObject):
                     misc_helpers.release_capture(self.media_capture)
                     self.media_capture = None
 
-                print("Re-opening video capture post-recording...")
+                print("[INFO] Re-opening video capture post-recording...")
                 self.media_capture = cv2.VideoCapture(self.media_path)
                 if self.media_capture.isOpened():
                     current_slider_pos = self.main_window.videoSeekSlider.value()
                     self.current_frame_number = current_slider_pos
                     self.next_frame_to_display = current_slider_pos
                     misc_helpers.seek_frame(self.media_capture, current_slider_pos)
-                    print("Video capture re-opened and seeked.")
+                    print("[INFO] Video capture re-opened and seeked.")
                 else:
                     print("[WARN] Failed to re-open media capture after recording.")
                     self.media_capture = None
@@ -1845,7 +1836,9 @@ class VideoProcessor(QObject):
         video_control_actions.reset_media_buttons(self.main_window)
 
         # 8. Final Cleanup
-        print("Clearing GPU Cache and running garbage collection post-recording.")
+        print(
+            "[INFO] Clearing GPU Cache and running garbage collection post-recording."
+        )
         try:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -1860,7 +1853,7 @@ class VideoProcessor(QObject):
             self.disable_virtualcam()
         except Exception:
             pass
-        print("default-style recording finalized.")
+        print("[INFO] Default-style recording finalized.")
 
         if self.main_window.control["OpenOutputToggle"]:
             try:
@@ -1869,7 +1862,7 @@ class VideoProcessor(QObject):
                 pass
 
         # Emit signal to notify JobProcessor that processing has finished SUCCESSFULLY
-        print("Emitting processing_stopped_signal (default-style success).")
+        print("[INFO] Emitting processing_stopped_signal (default-style success).")
         self.processing_stopped_signal.emit()
 
     # --- Virtual Camera Methods ---
@@ -1917,7 +1910,7 @@ class VideoProcessor(QObject):
                 backend or self.main_window.control["VirtCamBackendSelection"]
             )
             print(
-                f"Enabling virtual camera: {frame_width}x{frame_height} @ {int(current_fps)}fps, Backend: {backend_to_use}, Format: BGR"
+                f"[INFO] Enabling virtual camera: {frame_width}x{frame_height} @ {int(current_fps)}fps, Backend: {backend_to_use}, Format: BGR"
             )
             self.virtcam = pyvirtualcam.Camera(
                 width=frame_width,
@@ -1926,7 +1919,7 @@ class VideoProcessor(QObject):
                 backend=backend_to_use,
                 fmt=pyvirtualcam.PixelFormat.BGR,  # Processed frame is BGR
             )
-            print(f"Virtual camera '{self.virtcam.device}' started.")
+            print(f"[INFO] Virtual camera '{self.virtcam.device}' started.")
         except Exception as e:
             print(f"[ERROR] Failed to enable virtual camera: {e}")
             self.virtcam = None
@@ -1934,7 +1927,7 @@ class VideoProcessor(QObject):
     def disable_virtualcam(self):
         """Stops the pyvirtualcam device."""
         if self.virtcam:
-            print(f"Disabling virtual camera '{self.virtcam.device}'.")
+            print(f"[INFO] Disabling virtual camera '{self.virtcam.device}'.")
             try:
                 self.virtcam.close()
             except Exception as e:
@@ -1970,7 +1963,7 @@ class VideoProcessor(QObject):
             print("[ERROR] Video source not open for multi-segment recording.")
             return
 
-        print("--- Initializing multi-segment recording... ---")
+        print("[INFO] --- Initializing multi-segment recording... ---")
 
         # 2. Set State Flags
         self.is_processing_segments = True
@@ -1993,7 +1986,9 @@ class VideoProcessor(QObject):
             unique_id = uuid.uuid4()
             self.segment_temp_dir = os.path.join(base_temp_dir, f"run_{unique_id}")
             os.makedirs(self.segment_temp_dir, exist_ok=True)
-            print(f"Created temporary directory for segments: {self.segment_temp_dir}")
+            print(
+                f"[INFO] Created temporary directory for segments: {self.segment_temp_dir}"
+            )
         except Exception as e:
             print(f"[ERROR] Failed to create temporary directory: {e}")
             self.main_window.display_messagebox_signal.emit(
@@ -2022,14 +2017,14 @@ class VideoProcessor(QObject):
 
         # 2. Check if all segments are done
         if self.current_segment_index >= len(self.segments_to_process):
-            print("All segments processed.")
+            print("[INFO] All segments processed.")
             self.finalize_segment_concatenation()
             return
 
         # 3. Get segment details
         start_frame, end_frame = self.segments_to_process[self.current_segment_index]
         print(
-            f"--- Starting Segment {segment_num}/{len(self.segments_to_process)} (Frames: {start_frame} - {end_frame}) ---"
+            f"[INFO] --- Starting Segment {segment_num}/{len(self.segments_to_process)} (Frames: {start_frame} - {end_frame}) ---"
         )
         self.current_segment_end_frame = end_frame
 
@@ -2041,13 +2036,11 @@ class VideoProcessor(QObject):
             return
 
         # 4. Seek to the start frame of the segment
-        print(f"Seeking to start frame {start_frame}...")
+        print(f"[INFO] Seeking to start frame {start_frame}...")
         misc_helpers.seek_frame(self.media_capture, start_frame)
         # We use preview_target_height=None to ensure segments are always read at full resolution
         ret, frame_bgr = misc_helpers.read_frame(
-            self.media_capture,
-            self.media_rotation,
-            preview_target_height=None,  # MODIFICATION: Pass rotation
+            self.media_capture, self.media_rotation, preview_target_height=None
         )
         if ret:
             self.current_frame = numpy.ascontiguousarray(
@@ -2073,8 +2066,9 @@ class VideoProcessor(QObject):
         with self.frame_queue.mutex:
             self.frame_queue.queue.clear()
 
-        # [MODIFICATION] Replace self.threads.clear() with worker pool startup logic
-        print(f"Starting {self.num_threads} persistent worker thread(s) for segment...")
+        print(
+            f"[INFO] Starting {self.num_threads} persistent worker thread(s) for segment..."
+        )
         # Ensure old workers are cleaned up (if present)
         self.join_and_clear_threads()
         self.worker_threads = []
@@ -2100,17 +2094,12 @@ class VideoProcessor(QObject):
             return
 
         # 7. Synchronously process the first frame of the segment
-        #    (This mirrors the logic in process_video for a smooth start)
         current_start_frame = self.current_frame_number
         print(
-            f"Sync: Synchronously processing first frame {current_start_frame} of segment..."
+            f"[INFO] Sync: Synchronously processing first frame {current_start_frame} of segment..."
         )
         with self.frame_queue.mutex:
             self.frame_queue.queue.clear()
-
-        # [MODIFICATION] Removed erroneous line: self.frame_queue.put(current_start_frame)
-        # This was putting an 'int' into the task queue, causing the pool workers to crash.
-        # The line below handles the first frame processing (synchronously or via one-shot thread).
 
         self.start_frame_worker(
             current_start_frame, self.current_frame, is_single_frame=True
@@ -2129,7 +2118,9 @@ class VideoProcessor(QObject):
         with self.state_lock:
             self.feeder_parameters = self.main_window.parameters.copy()
             self.feeder_control = self.main_window.control.copy()
-        print(f"Starting feeder thread (Mode: segment {self.current_segment_index})...")
+        print(
+            f"[INFO] Starting feeder thread (Mode: segment {self.current_segment_index})..."
+        )
         self.feeder_thread = threading.Thread(target=self._feeder_loop, daemon=True)
         self.feeder_thread.start()
 
@@ -2146,13 +2137,13 @@ class VideoProcessor(QObject):
             return
 
         segment_num = self.current_segment_index + 1
-        print(f"--- Stopping Segment {segment_num} --- ")
+        print(f"[INFO] --- Stopping Segment {segment_num} --- ")
 
         # 1. Stop timers
         self.gpu_memory_update_timer.stop()
 
         # 2a. Wait for the feeder thread
-        print(f"Waiting for feeder thread from segment {segment_num}...")
+        print(f"[INFO] Waiting for feeder thread from segment {segment_num}...")
         if self.feeder_thread and self.feeder_thread.is_alive():
             self.feeder_thread.join(timeout=2.0)
 
@@ -2162,36 +2153,36 @@ class VideoProcessor(QObject):
                     f"[WARN] Feeder thread from segment {segment_num} did not join gracefully."
                 )
             else:
-                print("Feeder thread joined.")
+                print("[INFO] Feeder thread joined.")
 
         else:
             # This case is normal if the feeder finished its work very quickly
-            print("Feeder thread was already finished.")
+            print("[INFO] Feeder thread was already finished.")
 
         self.feeder_thread = None
 
         # 2b. Wait for workers
-        print(f"Waiting for workers from segment {segment_num}...")
+        print(f"[INFO] Waiting for workers from segment {segment_num}...")
         self.join_and_clear_threads()
-        print("Workers joined.")
+        print("[INFO] Workers joined.")
         self.frames_to_display.clear()
 
         # 3. Finalize FFmpeg for this segment
         if self.recording_sp:
             if self.recording_sp.stdin and not self.recording_sp.stdin.closed:
                 try:
-                    print(f"Closing FFmpeg stdin for segment {segment_num}...")
+                    print(f"[INFO] Closing FFmpeg stdin for segment {segment_num}...")
                     self.recording_sp.stdin.close()
                 except OSError as e:
                     print(
                         f"[WARN] Error closing FFmpeg stdin for segment {segment_num}: {e}"
                     )
             print(
-                f"Waiting for FFmpeg subprocess (segment {segment_num}) to finish writing..."
+                f"[INFO] Waiting for FFmpeg subprocess (segment {segment_num}) to finish writing..."
             )
             try:
                 self.recording_sp.wait(timeout=10)
-                print(f"FFmpeg subprocess (segment {segment_num}) finished.")
+                print(f"[INFO] FFmpeg subprocess (segment {segment_num}) finished.")
             except subprocess.TimeoutExpired:
                 print(
                     f"[WARN] FFmpeg subprocess (segment {segment_num}) timed out, killing."
@@ -2218,13 +2209,13 @@ class VideoProcessor(QObject):
 
     def finalize_segment_concatenation(self):
         """Concatenates all valid temporary segment files into the final output file."""
-        print("--- Finalizing concatenation of segments... ---")
+        print("[INFO] --- Finalizing concatenation of segments... ---")
 
         # Failsafe: If this is called while an ffmpeg process is still running
         if self.recording_sp:
             segment_num = self.current_segment_index + 1
             print(
-                f"Finalizing: Stopping active FFmpeg process for segment {segment_num}..."
+                f"[INFO] Finalizing: Stopping active FFmpeg process for segment {segment_num}..."
             )
             if self.recording_sp.stdin and not self.recording_sp.stdin.closed:
                 try:
@@ -2235,7 +2226,9 @@ class VideoProcessor(QObject):
                     )
             try:
                 self.recording_sp.wait(timeout=10)
-                print(f"FFmpeg subprocess (segment {segment_num}) finished writing.")
+                print(
+                    f"[INFO] FFmpeg subprocess (segment {segment_num}) finished writing."
+                )
             except subprocess.TimeoutExpired:
                 print(
                     f"[WARN] FFmpeg subprocess (segment {segment_num}) timed out, killing."
@@ -2304,7 +2297,7 @@ class VideoProcessor(QObject):
             try:
                 # Added exist_ok=True for thread-safety
                 os.makedirs(output_dir, exist_ok=True)
-                print(f"Created output directory: {output_dir}")
+                print(f"[INFO] Created output directory: {output_dir}")
             except OSError as e:
                 print(f"[ERROR] Failed to create output directory {output_dir}: {e}")
                 self.main_window.display_messagebox_signal.emit(
@@ -2320,7 +2313,7 @@ class VideoProcessor(QObject):
                 return
 
         if Path(final_file_path).is_file():
-            print(f"Removing existing final file: {final_file_path}")
+            print(f"[INFO] Removing existing final file: {final_file_path}")
             try:
                 os.remove(final_file_path)
             except OSError as e:
@@ -2341,7 +2334,7 @@ class VideoProcessor(QObject):
         list_file_path = os.path.join(self.segment_temp_dir, "mylist.txt")
         concatenation_successful = False
         try:
-            print(f"Creating ffmpeg list file: {list_file_path}")
+            print(f"[INFO] Creating ffmpeg list file: {list_file_path}")
             with open(list_file_path, "w", encoding="utf-8") as f_list:
                 for segment_path in valid_segment_files:
                     abs_path = os.path.abspath(segment_path)
@@ -2351,7 +2344,7 @@ class VideoProcessor(QObject):
 
             # 5. Run final concatenation command
             print(
-                f"Concatenating {len(valid_segment_files)} valid segments into {final_file_path}..."
+                f"[INFO] Concatenating {len(valid_segment_files)} valid segments into {final_file_path}..."
             )
             concat_args = [
                 "ffmpeg",
@@ -2374,7 +2367,7 @@ class VideoProcessor(QObject):
             concatenation_successful = True
             log_prefix = "Job Manager: " if was_triggered_by_job else ""
             print(
-                f"--- {log_prefix}Successfully created final video: {final_file_path} ---"
+                f"[INFO] --- {log_prefix}Successfully created final video: {final_file_path} ---"
             )
 
         except subprocess.CalledProcessError as e:
@@ -2408,7 +2401,7 @@ class VideoProcessor(QObject):
             self.temp_segment_files = []
             self.current_segment_end_frame = None
             self.triggered_by_job_manager = False
-            print("Clearing frame queue of residual pills...")
+            print("[INFO] Clearing frame queue of residual pills...")
             with self.frame_queue.mutex:
                 self.frame_queue.queue.clear()
 
@@ -2421,16 +2414,16 @@ class VideoProcessor(QObject):
 
             if concatenation_successful:
                 print(
-                    f"Total segment processing and concatenation finished in {formatted_duration}"
+                    f"[INFO] Total segment processing and concatenation finished in {formatted_duration}"
                 )
             else:
                 print(
-                    f"Segment processing/concatenation failed after {formatted_duration}."
+                    f"[WARN] Segment processing/concatenation failed after {formatted_duration}."
                 )
 
             # 9. Final cleanup and UI reset
             print(
-                "Clearing GPU Cache and running garbage collection post-concatenation."
+                "[INFO] Clearing GPU Cache and running garbage collection post-concatenation."
             )
             try:
                 if torch.cuda.is_available():
@@ -2449,14 +2442,14 @@ class VideoProcessor(QObject):
                         misc_helpers.release_capture(self.media_capture)
                         self.media_capture = None
 
-                    print("Re-opening video capture post-segments...")
+                    print("[INFO] Re-opening video capture post-segments...")
                     self.media_capture = cv2.VideoCapture(self.media_path)
                     if self.media_capture.isOpened():
                         current_slider_pos = self.main_window.videoSeekSlider.value()
                         self.current_frame_number = current_slider_pos
                         self.next_frame_to_display = current_slider_pos
                         misc_helpers.seek_frame(self.media_capture, current_slider_pos)
-                        print("Video capture re-opened and seeked.")
+                        print("[INFO] Video capture re-opened and seeked.")
                     else:
                         print("[WARN] Failed to re-open media capture after segments.")
                         self.media_capture = None
@@ -2468,7 +2461,7 @@ class VideoProcessor(QObject):
 
             layout_actions.enable_all_parameters_and_control_widget(self.main_window)
             video_control_actions.reset_media_buttons(self.main_window)
-            print("Multi-segment processing flow finished.")
+            print("[INFO] Multi-segment processing flow finished.")
 
             if self.main_window.control["OpenOutputToggle"]:
                 try:
@@ -2477,7 +2470,7 @@ class VideoProcessor(QObject):
                     pass
 
             # Emit signal to notify JobProcessor that processing has finished SUCCESSFULLY
-            print("Emitting processing_stopped_signal (multi-segment success).")
+            print("[INFO] Emitting processing_stopped_signal (multi-segment success).")
             self.processing_stopped_signal.emit()
 
     def _cleanup_temp_dir(self):
@@ -2485,7 +2478,7 @@ class VideoProcessor(QObject):
         if self.segment_temp_dir and os.path.exists(self.segment_temp_dir):
             try:
                 print(
-                    f"Cleaning up temporary segment directory: {self.segment_temp_dir}"
+                    f"[INFO] Cleaning up temporary segment directory: {self.segment_temp_dir}"
                 )
                 shutil.rmtree(self.segment_temp_dir, ignore_errors=True)
             except Exception as e:
@@ -2544,7 +2537,7 @@ class VideoProcessor(QObject):
         """
         # 1. Start audio (ffplay) *first*
         if self.main_window.liveSoundButton.isChecked() and not self.recording:
-            print("Starting audio subprocess (ffplay)...")
+            print("[INFO] Starting audio subprocess (ffplay)...")
             self.start_live_sound()
 
             # 2. Start video (metronome) AFTER a delay
@@ -2552,7 +2545,9 @@ class VideoProcessor(QObject):
             AUDIO_STARTUP_LATENCY_MS = self.main_window.control.get(
                 "LiveSoundDelaySlider"
             )
-            print(f"Waiting {AUDIO_STARTUP_LATENCY_MS}ms for audio to initialize...")
+            print(
+                f"[INFO] Waiting {AUDIO_STARTUP_LATENCY_MS}ms for audio to initialize..."
+            )
 
             # Use the function with the clarified name
             QTimer.singleShot(
@@ -2561,7 +2556,7 @@ class VideoProcessor(QObject):
 
         else:
             # No audio, start video immediately
-            print("No audio. Starting video metronome immediately.")
+            print("[WARN] No audio. Starting video metronome immediately.")
             self._start_metronome(self.fps, is_first_start=True)
 
     def _start_video_metronome_after_audio_delay(self):
@@ -2571,7 +2566,7 @@ class VideoProcessor(QObject):
         """
         if not self.processing:  # Check in case the user stopped processing
             return
-        print("Audio startup delay complete. Starting video metronome.")
+        print("[INFO] Audio startup delay complete. Starting video metronome.")
         self._start_metronome(self.fps, is_first_start=True)
 
     def stop_live_sound(self):
@@ -2611,14 +2606,14 @@ class VideoProcessor(QObject):
             print("[WARN] Processing already active, cannot start webcam.")
             return
         if self.file_type != "webcam":
-            print("process_webcam: Only applicable for webcam input.")
+            print("[WARN] Process_webcam: Only applicable for webcam input.")
             return
         if not (self.media_capture and self.media_capture.isOpened()):
-            print("Error: Unable to open webcam source.")
+            print("[ERROR] Unable to open webcam source.")
             video_control_actions.reset_media_buttons(self.main_window)
             return
 
-        print("Starting webcam processing setup...")
+        print("[INFO] Starting webcam processing setup...")
 
         # 1. Set State Flags
         self.processing = True
@@ -2637,13 +2632,8 @@ class VideoProcessor(QObject):
             fps = 30
         self.fps = fps
 
-        print(f"Webcam target FPS: {self.fps}")
+        print(f"[INFO] Webcam target FPS: {self.fps}")
 
-        # [MODIFICATION] START WORKER POOL
-        # This was the missing piece. The webcam mode needs to start
-        # the persistent worker threads to consume tasks from the frame_queue.
-        print(f"Starting {self.num_threads} persistent worker thread(s)...")
-        # Ensure old workers are cleared (from a previous run)
         self.join_and_clear_threads()
         self.worker_threads = []
         for i in range(self.num_threads):
@@ -2654,10 +2644,9 @@ class VideoProcessor(QObject):
             )
             worker.start()
             self.worker_threads.append(worker)
-        # [FIN MODIFICATION]
 
         # Start the feeder thread
-        print("Starting feeder thread (Mode: webcam)...")
+        print("[INFO] Starting feeder thread (Mode: webcam)...")
         self.feeder_thread = threading.Thread(target=self._feeder_loop, daemon=True)
         self.feeder_thread.start()
 

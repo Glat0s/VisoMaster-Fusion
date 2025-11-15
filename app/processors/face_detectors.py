@@ -19,6 +19,9 @@ class FaceDetectors:
     """
 
     def unload_models(self):
+        """
+        Unloads the currently active face detector model from memory.
+        """
         if self.current_detector_model:
             self.models_processor.unload_model(self.current_detector_model)
             self.current_detector_model = None
@@ -165,7 +168,7 @@ class FaceDetectors:
         if scores_tensor.dim() == 0:
             scores_tensor = scores_tensor.unsqueeze(0)
         if bboxes_tensor.size(0) != scores_tensor.size(0):
-            # Log mismatch?
+            # Mismatch in tensor sizes, aborting.
             return None, None, None
 
         # Ensure tensors are contiguous (optimizes NMS)
@@ -213,7 +216,6 @@ class FaceDetectors:
                 # new_width_on_canvas = img_width * det_scale
                 det_img_center_y = (img_height * det_scale) / 2.0
                 det_img_center_x = (img_width * det_scale) / 2.0
-                # --- END BUG FIX ---
 
                 center_x = (det_boxes[:, 0] + det_boxes[:, 2]) / 2 - det_img_center_x
                 center_y = (det_boxes[:, 1] + det_boxes[:, 3]) / 2 - det_img_center_y
@@ -352,6 +354,15 @@ class FaceDetectors:
                 model_name
             )
 
+        # Fail-safe check: If model failed to load, ort_session will be None.
+        ort_session = self.models_processor.models.get(model_name)
+        if not ort_session:
+            # This is the primary check. The individual checks in detect_... were redundant.
+            print(
+                f"[ERROR] {model_name} model failed to load or is not available. Skipping detection."
+            )
+            return [], [], []
+
         detection_function = detector["function"]
 
         # Prepare arguments for the specific detector function.
@@ -364,6 +375,7 @@ class FaceDetectors:
             "landmark_score": landmark_score,
             "from_points": from_points,
             "rotation_angles": rotation_angles or [0],
+            "ort_session": ort_session,  # Pass the session to avoid re-fetching
         }
         # Some detectors have a parameterized input size, others are fixed.
         if detect_mode in ["RetinaFace", "SCRFD"]:
@@ -374,10 +386,7 @@ class FaceDetectors:
     def detect_retinaface(self, **kwargs):
         """Runs the RetinaFace detection pipeline."""
         model_name = "RetinaFace"
-        ort_session = self.models_processor.models.get(model_name)
-        if not ort_session:
-            print(f"WARNING: {model_name} model not loaded. Skipping detection.")
-            return [], [], []
+        ort_session = kwargs.get("ort_session")
 
         img, input_size, score, rotation_angles = (
             kwargs.get("img"),
@@ -423,13 +432,17 @@ class FaceDetectors:
 
             input_height, input_width = aimg.shape[2], aimg.shape[3]
             fmc = 3
+            # Process outputs from each feature map stride (8, 16, 32)
             for idx, stride in enumerate([8, 16, 32]):
+                # Get scores, bbox predictions, and keypoint predictions
                 scores, bbox_preds, kps_preds = (
                     net_outs[idx],
                     net_outs[idx + fmc] * stride,
                     net_outs[idx + fmc * 2] * stride,
                 )
                 height, width = input_height // stride, input_width // stride
+
+                # Generate anchor centers (cache them for efficiency)
                 key = (height, width, stride)
                 if key in self.center_cache:
                     anchor_centers = self.center_cache[key]
@@ -443,7 +456,11 @@ class FaceDetectors:
                     )
                     if len(self.center_cache) < 100:
                         self.center_cache[key] = anchor_centers
+
+                # Filter detections by score
                 pos_inds = np.where(scores >= score)[0]
+
+                # Calculate bounding boxes from anchor centers and predictions
                 bboxes = np.stack(
                     [
                         anchor_centers[:, 0] - bbox_preds[:, 0],
@@ -454,6 +471,8 @@ class FaceDetectors:
                     axis=-1,
                 )
                 pos_scores, pos_bboxes = scores[pos_inds], bboxes[pos_inds]
+
+                # If rotated, transform bboxes back to original orientation
                 if angle != 0 and len(pos_bboxes) > 0:
                     points1, points2 = (
                         faceutil.trans_points2d(pos_bboxes[:, :2], IM),
@@ -481,6 +500,8 @@ class FaceDetectors:
                             np.stack((_x1, _y2), axis=1),
                         )
                     pos_bboxes = np.hstack((points1, points2))
+
+                # Calculate keypoints from anchor centers and predictions
                 preds = [
                     item
                     for i in range(0, kps_preds.shape[1], 2)
@@ -491,6 +512,8 @@ class FaceDetectors:
                 ]
                 kpss = np.stack(preds, axis=-1).reshape((-1, 5, 2))
                 pos_kpss = kpss[pos_inds]
+
+                # Handle multi-rotation logic (filtering by face orientation)
                 if do_rotation:
                     for i in range(len(pos_kpss)):
                         face_size = max(
@@ -500,10 +523,12 @@ class FaceDetectors:
                         angle_deg_to_front = faceutil.get_face_orientation(
                             face_size, pos_kpss[i]
                         )
+                        # Discard faces that are not facing front
                         if abs(angle_deg_to_front) > 50.00:
                             pos_scores[i] = 0.0
                         if angle != 0:
                             pos_kpss[i] = faceutil.trans_points2d(pos_kpss[i], IM)
+                    # Re-filter based on the new scores
                     pos_inds = np.where(pos_scores >= score)[0]
                     pos_scores, pos_bboxes, pos_kpss = (
                         pos_scores[pos_inds],
@@ -514,6 +539,7 @@ class FaceDetectors:
                 bboxes_list.append(pos_bboxes)
                 scores_list.append(pos_scores)
 
+        # Filter all collected detections (from all angles/strides) using GPU NMS
         det, kpss, score_values = self._filter_detections_gpu(
             scores_list,
             bboxes_list,
@@ -526,15 +552,13 @@ class FaceDetectors:
         if det is None:
             return [], [], []
 
+        # Optionally refine landmarks with a secondary model
         return self._refine_landmarks(img_landmark, det, kpss, score_values, **kwargs)
 
     def detect_scrdf(self, **kwargs):
         """Runs the SCRFD detection pipeline."""
         model_name = "SCRFD2.5g"
-        ort_session = self.models_processor.models.get(model_name)
-        if not ort_session:
-            print(f"WARNING: {model_name} model not loaded. Skipping detection.")
-            return [], [], []
+        ort_session = kwargs.get("ort_session")
 
         img, input_size, score, rotation_angles = (
             kwargs.get("img"),
@@ -581,13 +605,17 @@ class FaceDetectors:
             )
             input_height, input_width = aimg.shape[2], aimg.shape[3]
             fmc = 3
+            # Process outputs from each feature map stride (8, 16, 32)
             for idx, stride in enumerate([8, 16, 32]):
+                # Get scores, bbox predictions, and keypoint predictions
                 scores, bbox_preds, kps_preds = (
                     net_outs[idx],
                     net_outs[idx + fmc] * stride,
                     net_outs[idx + fmc * 2] * stride,
                 )
                 height, width = input_height // stride, input_width // stride
+
+                # Generate anchor centers (cache them for efficiency)
                 key = (height, width, stride)
                 if key in self.center_cache:
                     anchor_centers = self.center_cache[key]
@@ -601,7 +629,11 @@ class FaceDetectors:
                     )
                     if len(self.center_cache) < 100:
                         self.center_cache[key] = anchor_centers
+
+                # Filter detections by score
                 pos_inds = np.where(scores >= score)[0]
+
+                # Calculate bounding boxes from anchor centers and predictions
                 bboxes = np.stack(
                     [
                         anchor_centers[:, 0] - bbox_preds[:, 0],
@@ -612,6 +644,8 @@ class FaceDetectors:
                     axis=-1,
                 )
                 pos_scores, pos_bboxes = scores[pos_inds], bboxes[pos_inds]
+
+                # If rotated, transform bboxes back to original orientation
                 if angle != 0 and len(pos_bboxes) > 0:
                     points1, points2 = (
                         faceutil.trans_points2d(pos_bboxes[:, :2], IM),
@@ -639,6 +673,8 @@ class FaceDetectors:
                             np.stack((_x1, _y2), axis=1),
                         )
                     pos_bboxes = np.hstack((points1, points2))
+
+                # Calculate keypoints from anchor centers and predictions
                 preds = [
                     item
                     for i in range(0, kps_preds.shape[1], 2)
@@ -649,6 +685,8 @@ class FaceDetectors:
                 ]
                 kpss = np.stack(preds, axis=-1).reshape((-1, 5, 2))
                 pos_kpss = kpss[pos_inds]
+
+                # Handle multi-rotation logic (filtering by face orientation)
                 if do_rotation:
                     for i in range(len(pos_kpss)):
                         face_size = max(
@@ -658,10 +696,12 @@ class FaceDetectors:
                         angle_deg_to_front = faceutil.get_face_orientation(
                             face_size, pos_kpss[i]
                         )
+                        # Discard faces that are not facing front
                         if abs(angle_deg_to_front) > 50.00:
                             pos_scores[i] = 0.0
                         if angle != 0:
                             pos_kpss[i] = faceutil.trans_points2d(pos_kpss[i], IM)
+                    # Re-filter based on the new scores
                     pos_inds = np.where(pos_scores >= score)[0]
                     pos_scores, pos_bboxes, pos_kpss = (
                         pos_scores[pos_inds],
@@ -672,6 +712,7 @@ class FaceDetectors:
                 bboxes_list.append(pos_bboxes)
                 scores_list.append(pos_scores)
 
+        # Filter all collected detections (from all angles/strides) using GPU NMS
         det, kpss, score_values = self._filter_detections_gpu(
             scores_list,
             bboxes_list,
@@ -684,15 +725,13 @@ class FaceDetectors:
         if det is None:
             return [], [], []
 
+        # Optionally refine landmarks with a secondary model
         return self._refine_landmarks(img_landmark, det, kpss, score_values, **kwargs)
 
     def detect_yoloface(self, **kwargs):
         """Runs the Yolov8-face detection pipeline."""
         model_name = "YoloFace8n"
-        ort_session = self.models_processor.models.get(model_name)
-        if not ort_session:
-            print(f"WARNING: {model_name} model not loaded. Skipping detection.")
-            return [], [], []
+        ort_session = kwargs.get("ort_session")
 
         img, score, rotation_angles = (
             kwargs.get("img"),
@@ -720,7 +759,7 @@ class FaceDetectors:
             else:
                 IM, aimg = None, det_img  # aimg is uint8 CHW
 
-            # *** CORRECTION: Convert to float and normalize AFTER rotation, before binding ***
+            # Note: Convert to float and normalize AFTER rotation, before binding
             aimg_prepared = aimg.to(torch.float32) / 255.0
             aimg_prepared = torch.unsqueeze(
                 aimg_prepared, 0
@@ -753,10 +792,9 @@ class FaceDetectors:
                 bbox_raw, kps_raw, score_raw = (
                     bbox_raw[keep_indices],
                     kps_raw[keep_indices],
-                    score_raw[
-                        keep_indices
-                    ],  # Keep score_raw as [N, 1] or similar for consistency
+                    score_raw[keep_indices],  # Keep score_raw as [N, 1] or similar
                 )
+                # Convert (center_x, center_y, w, h) to (x1, y1, x2, y2)
                 bboxes_raw = np.stack(
                     (
                         bbox_raw[:, 0] - bbox_raw[:, 2] / 2,
@@ -793,12 +831,16 @@ class FaceDetectors:
                             np.stack((_x1, _y2), axis=1),
                         )
                     bboxes_raw = np.hstack((points1, points2))
+
+                # Reshape keypoints
                 kpss_raw = np.stack(
                     [
                         np.array([[kps[i], kps[i + 1]] for i in range(0, len(kps), 3)])
                         for kps in kps_raw
                     ]
                 )
+
+                # Handle multi-rotation logic (filtering by face orientation)
                 if do_rotation:
                     score_raw_flat_filtered = (
                         score_raw.flatten()
@@ -820,16 +862,13 @@ class FaceDetectors:
 
                     # Filter again based on the modified scores
                     keep_indices_rot = np.where(score_raw_flat_filtered >= score)[0]
-                    # Make sure score_raw is [N, 1] or similar before indexing
                     score_raw = score_raw[keep_indices_rot]
                     bboxes_raw = bboxes_raw[keep_indices_rot]
                     kpss_raw = kpss_raw[keep_indices_rot]
 
-                # Ensure score_raw has the correct shape before appending
+                # Ensure score_raw has the correct shape [N, 1] before appending
                 if score_raw.ndim == 1:
-                    score_raw = score_raw[
-                        :, np.newaxis
-                    ]  # Reshape to [N, 1] if it's flat
+                    score_raw = score_raw[:, np.newaxis]
 
                 # Check if there are still detections after rotation filtering
                 if score_raw.size > 0:
@@ -854,10 +893,7 @@ class FaceDetectors:
     def detect_yunet(self, **kwargs):
         """Runs the Yunet detection pipeline."""
         model_name = "YunetN"
-        ort_session = self.models_processor.models.get(model_name)
-        if not ort_session:
-            print(f"WARNING: {model_name} model not loaded. Skipping detection.")
-            return [], [], []
+        ort_session = kwargs.get("ort_session")
 
         img, score, rotation_angles = (
             kwargs.get("img"),
@@ -887,7 +923,7 @@ class FaceDetectors:
             else:
                 IM, aimg = None, det_img  # aimg is uint8 CHW BGR
 
-            # *** CORRECTION: Convert to float AFTER rotation, before binding ***
+            # Note: Convert to float AFTER rotation, before binding
             aimg_prepared = aimg.to(dtype=torch.float32)
             aimg_prepared = torch.unsqueeze(
                 aimg_prepared, 0
@@ -912,12 +948,15 @@ class FaceDetectors:
             )
             strides = [8, 16, 32]
             for idx, stride in enumerate(strides):
+                # Get predictions from the current stride
                 cls_pred, obj_pred, reg_pred, kps_pred = (
                     net_outs[idx].reshape(-1, 1),
                     net_outs[idx + len(strides)].reshape(-1, 1),
                     net_outs[idx + len(strides) * 2].reshape(-1, 4),
                     net_outs[idx + len(strides) * 3].reshape(-1, 5 * 2),
                 )
+
+                # Generate/retrieve anchor centers
                 key = (tuple(final_input_size), stride)
                 if key in self.center_cache:
                     anchor_centers = self.center_cache[key]
@@ -944,6 +983,7 @@ class FaceDetectors:
                 if pos_inds.size == 0:
                     continue
 
+                # Calculate bboxes for positive detections
                 bbox_cxy = (
                     reg_pred[pos_inds, :2] * stride + anchor_centers[pos_inds, :]
                 )  # Filter anchor_centers too
@@ -958,10 +998,10 @@ class FaceDetectors:
                     ],
                     axis=-1,
                 )
-                # Filter scores before assignment
-                pos_scores = scores_val[pos_inds]
+                pos_scores = scores_val[pos_inds]  # Filter scores
                 pos_bboxes = bboxes  # bboxes is already filtered
 
+                # If rotated, transform bboxes back
                 if angle != 0 and len(pos_bboxes) > 0:
                     points1, points2 = (
                         faceutil.trans_points2d(pos_bboxes[:, :2], IM),
@@ -990,7 +1030,7 @@ class FaceDetectors:
                         )
                     pos_bboxes = np.hstack((points1, points2))
 
-                # Filter kps_pred and anchor_centers before calculating kpss
+                # Calculate keypoints for positive detections
                 kps_pred_filtered = kps_pred[pos_inds]
                 anchor_centers_filtered = anchor_centers[pos_inds]
 
@@ -1004,11 +1044,12 @@ class FaceDetectors:
                     ],
                     axis=-1,
                 )
-
-                # Reshape based on the number of filtered keypoints
-                kpss = kpss.reshape((kpss.shape[0], -1, 2))
+                kpss = kpss.reshape(
+                    (kpss.shape[0], -1, 2)
+                )  # Reshape based on filtered count
                 pos_kpss = kpss  # Already filtered
 
+                # Handle multi-rotation logic (filtering by face orientation)
                 if do_rotation:
                     pos_scores_flat_filtered = (
                         pos_scores.flatten()
@@ -1030,16 +1071,13 @@ class FaceDetectors:
 
                     # Filter again based on the modified scores
                     pos_inds_rot = np.where(pos_scores_flat_filtered >= score)[0]
-                    # Make sure pos_scores is [N, 1] or similar before indexing
                     pos_scores = pos_scores[pos_inds_rot]
                     pos_bboxes = pos_bboxes[pos_inds_rot]
                     pos_kpss = pos_kpss[pos_inds_rot]
 
-                # Ensure pos_scores has the correct shape before appending
+                # Ensure pos_scores has the correct shape [N, 1] before appending
                 if pos_scores.ndim == 1:
-                    pos_scores = pos_scores[
-                        :, np.newaxis
-                    ]  # Reshape to [N, 1] if it's flat
+                    pos_scores = pos_scores[:, np.newaxis]
 
                 # Check if there are still detections after rotation filtering
                 if pos_scores.size > 0:

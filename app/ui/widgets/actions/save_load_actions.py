@@ -295,7 +295,9 @@ def load_saved_workspace(
                             else:  # Backwards compatibility
                                 input_face_button.kv_map = payload
                         except Exception as e:
-                            print(f"Error loading K/V map from {kv_map_path}: {e}")
+                            print(
+                                f"[ERROR] Error loading K/V map from {kv_map_path}: {e}"
+                            )
 
             # Add embeddings
             embeddings_data = data["embeddings_data"]
@@ -576,7 +578,7 @@ def save_current_workspace(
                 torch.save(payload, kv_map_path)
             except Exception as e:
                 print(
-                    f"Error saving K/V map for input face {input_face.face_id} to {kv_map_path}: {e}"
+                    f"[ERROR] Error saving K/V map for input face {input_face.face_id} to {kv_map_path}: {e}"
                 )
                 kv_map_path = None
         input_faces_data[face_id] = {
@@ -645,7 +647,7 @@ def save_current_workspace(
     else:
         # Fallback for safety, log a warning
         print(
-            f"[WARN] save_current_workspace: Unexpected type for current_widget_parameters: {type(main_window.current_widget_parameters)}. Saving empty dict."
+            f"[WARN] Unexpected type for current widget parameters: {type(main_window.current_widget_parameters)}. Saving empty dict."
         )
 
     data = {
@@ -683,7 +685,7 @@ def save_current_workspace(
             if isinstance(data_filename, str) and data_filename.endswith(
                 "last_workspace.json"
             ):
-                print(f"Last workspace saved to: {data_filename}")
+                print(f"[INFO] Last workspace saved to: {data_filename}")
             else:
                 common_widget_actions.create_and_show_toast_message(
                     main_window,
@@ -762,7 +764,7 @@ def save_current_job(main_window: "MainWindow"):
                 torch.save(payload, kv_map_path)
             except Exception as e:
                 print(
-                    f"Error saving K/V map for input face {input_face.face_id} to {kv_map_path}: {e}"
+                    f"[ERROR] Error saving K/V map for input face {input_face.face_id} to {kv_map_path}: {e}"
                 )
                 kv_map_path = None
         input_faces_data[face_id] = {

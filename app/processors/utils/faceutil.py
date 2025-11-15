@@ -2445,7 +2445,7 @@ def histogram_matching(source_image, target_image, diffslider):
         # Check if values are empty
         if source_values.numel() == 0 or target_values.numel() == 0:
             print(
-                f"No valid pixels for channel {channel}. Skipping histogram matching for this channel."
+                f"[WARN] No valid pixels for channel {channel}. Skipping histogram matching for this channel."
             )
             continue
 
